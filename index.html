@@ -37,7 +37,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .label{font-size:11.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
 
 /* header */
-header{padding-block:28px 18px;display:flex;flex-wrap:wrap;gap:12px 32px;align-items:flex-end;justify-content:space-between;border-bottom:2px solid var(--ink)}
+header{padding-block:12px 18px;display:flex;flex-wrap:wrap;gap:12px 32px;align-items:flex-end;justify-content:space-between;border-bottom:2px solid var(--ink)}
 header h1{font-size:clamp(26px,4vw,36px);font-weight:800;letter-spacing:-.01em}
 header p{margin:4px 0 0;color:var(--muted);max-width:56ch}
 .stats{display:flex;flex-wrap:wrap;gap:6px 24px;font-variant-numeric:tabular-nums}
@@ -121,12 +121,42 @@ form h3{font-size:17px}
 .toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 20px);transform:translateX(-50%);background:var(--ink);color:var(--ground);padding:10px 16px;border-radius:6px;font-size:14px;max-width:calc(100% - 32px);box-shadow:0 6px 20px rgba(0,0,0,.25)}
 footer{margin-top:40px;padding-top:14px;border-top:1px solid var(--line);color:var(--muted);font-size:13px;display:flex;flex-wrap:wrap;gap:8px 20px;justify-content:space-between}
 .linkbtn{background:none;border:0;padding:0;color:var(--ink);text-decoration:underline;cursor:pointer;font-size:13px}
+
+/* accounts */
+.topbar{display:flex;flex-wrap:wrap;gap:8px 16px;justify-content:space-between;align-items:center;padding-top:14px}
+.account{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;font-size:13.5px}
+.btn-ghost{border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:5px 12px;cursor:pointer;font-weight:500;font-size:13.5px}
+.btn-ghost:hover{border-color:var(--ink)}
+.btn-ghost.primary{background:var(--ink);color:var(--ground);border-color:var(--ink)}
+.btn-ghost.danger{color:var(--danger);border-color:var(--danger)}
+.gate{display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--line);padding-top:16px}
+.gate p{margin:0;color:var(--muted);font-size:14px}
+.gate .actions{display:flex;gap:8px;flex-wrap:wrap}
+dialog{border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);padding:22px;width:min(460px,calc(100% - 32px));max-height:calc(100% - 48px)}
+dialog::backdrop{background:rgba(10,20,14,.45)}
+dialog form{border-top:0;padding-top:0}
+.dlg-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.x{background:none;border:0;font-size:22px;line-height:1;cursor:pointer;color:var(--muted);padding:0 4px}
+.switch{font-size:13.5px;color:var(--muted);margin:0}
+.presets{display:flex;flex-wrap:wrap;gap:6px}
+.preset{font-size:12.5px;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:2px 10px;cursor:pointer}
+.preset:hover{border-color:var(--ink)}
+.mine{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-direction:column}
+.mine li{display:flex;flex-direction:column;gap:6px;padding:12px 0;border-top:1px solid var(--line)}
+.mine .top{display:flex;justify-content:space-between;gap:10px;align-items:baseline;flex-wrap:wrap}
+.mine .dates{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.mine .past{opacity:.6}
+.confirm{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:13px;background:var(--ground);border-radius:5px;padding:8px 10px}
+.yours{border:1px solid var(--green);border-radius:6px;padding:12px;display:flex;flex-direction:column;gap:8px;font-size:14px}
 </style>
 
 <div class="wrap">
+  <div class="topbar">
+    <div class="label">NYC Parks · Van Cortlandt Park, Bronx</div>
+    <div class="account" id="account"></div>
+  </div>
   <header>
     <div>
-      <div class="label">NYC Parks · Van Cortlandt Park, Bronx</div>
       <h1>Bench Adoption Registry</h1>
       <p>Every bench in the park, who has adopted it, and until when. Pick an open bench to adopt it.</p>
     </div>
@@ -148,10 +178,20 @@ footer{margin-top:40px;padding-top:14px;border-top:1px solid var(--line);color:v
   </div>
 
   <footer>
-    <span>This demo uses sample benches and donors. Adoptions are saved in this browser only.</span>
+    <span>Demo: sample benches and donors. Accounts and adoptions are saved in this browser only.</span>
     <button class="linkbtn" id="reset">Reset sample data</button>
   </footer>
 </div>
+
+<dialog id="auth-dlg" aria-labelledby="auth-title">
+  <form id="auth-form" novalidate></form>
+</dialog>
+
+<dialog id="mine-dlg" aria-labelledby="mine-title">
+  <div class="dlg-head"><h3 id="mine-title" style="font-size:19px">My adoptions</h3><button class="x" id="mine-close" aria-label="Close">×</button></div>
+  <ul class="mine" id="mine-list"></ul>
+</dialog>
+
 <div class="toast" id="toast" role="status" hidden></div>
 
 <script>
@@ -174,7 +214,13 @@ function addMonths(s, m) {
 const endOf = (start, months) => addDays(addMonths(start, months), -1);
 const fmt = s => toD(s).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 const daysBetween = (a, b) => Math.round((toD(b) - toD(a)) / DAY);
-const termLabel = m => m % 12 === 0 ? `${m / 12} year${m === 12 ? "" : "s"}` : `${m} months`;
+// Terms are inclusive of both start and end dates.
+function durLabel(start, end) {
+  const d = daysBetween(start, end) + 1;
+  if (d < 60) return `${d} day${d === 1 ? "" : "s"}`;
+  const m = Math.round(d / 30.44);
+  return m % 12 === 0 ? `${m / 12} year${m === 12 ? "" : "s"}` : `${m} months`;
+}
 const EXPIRING_DAYS = 90;
 
 /* ---------- inventory: 520 benches across 13 areas (deterministic) ---------- */
@@ -194,14 +240,15 @@ for (const [code, name, n] of ZONES)
     BENCHES.push({ id: `VC-${code}-${String(i).padStart(3, "0")}`, zone: code, zoneName: name, type: TYPES[Math.floor(r() ** 1.8 * TYPES.length)] });
 const BY_ID = Object.fromEntries(BENCHES.map(b => [b.id, b]));
 
-/* ---------- storage: one list of adoption records ---------- */
-const KEY = "vcp-bench-adoptions-v1";
-let adoptions = load();
-function load() {
-  try { const raw = localStorage.getItem(KEY); if (raw) return JSON.parse(raw); } catch (e) {}
-  return seed();
-}
-function save() { try { localStorage.setItem(KEY, JSON.stringify(adoptions)); } catch (e) {} }
+/* ---------- storage: adoptions, accounts, current session ---------- */
+const KEY = "vcp-bench-adoptions-v1", USERS_KEY = "vcp-bench-users-v1", SESSION_KEY = "vcp-bench-session-v1";
+const read = (k, fallback) => { try { const raw = localStorage.getItem(k); return raw ? JSON.parse(raw) : fallback; } catch (e) { return fallback; } };
+const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+let adoptions = read(KEY, null) || seed();
+let users = read(USERS_KEY, []);
+let me = users.find(u => u.id === read(SESSION_KEY, null)) || null;
+const save = () => write(KEY, adoptions);
+
 function seed() {
   const first = ["Maria", "James", "Aisha", "Daniel", "Rosa", "Kevin", "Priya", "Tom", "Yolanda", "Samuel", "Grace", "Luis", "Hannah", "Omar", "Beatriz", "Victor"];
   const last = ["Delgado", "O'Brien", "Okafor", "Kim", "Rivera", "Feldman", "Patel", "Nguyen", "Morales", "Goldberg", "Adeyemi", "Santos"];
@@ -211,23 +258,45 @@ function seed() {
   const pick = a => a[Math.floor(sr() * a.length)];
   for (const b of BENCHES) {
     const x = sr();
-    if (x > 0.42) continue;
+    if (x > 0.42) {
+      // a few open benches already have a future reservation
+      if (x > 0.97) { const fs = addDays(TODAY, 20 + Math.floor(sr() * 120)); out.push({ id: "a" + out.length, benchId: b.id, donor: pick(orgs), email: "", anonymous: false, plaque: "", start: fs, end: endOf(fs, 12), createdAt: TODAY, sample: true }); }
+      continue;
+    }
     const donor = sr() < 0.15 ? pick(orgs) : `${pick(first)} ${pick(last)}`;
     const months = pick([6, 12, 12, 24, 36, 60, 120]);
-    // start somewhere so that the term is currently running, with a spread of remaining time
     const into = Math.floor(sr() * months * 30.4);
     const start = addDays(TODAY, -into);
     const honoree = `${pick(first)} ${pick(last)}`;
-    out.push({ id: "a" + out.length, benchId: b.id, donor, email: "", anonymous: sr() < 0.1, plaque: pick(lines)(donor.includes(" ") && sr() < .5 ? honoree : donor).toUpperCase(), start, months, end: endOf(start, months), createdAt: start, sample: true });
-    // some benches carry an expired earlier term, and a few a reservation for the next one
-    if (sr() < 0.3) { const ps = addMonths(start, -24); out.push({ id: "a" + out.length, benchId: b.id, donor: `${pick(first)} ${pick(last)}`, email: "", anonymous: false, plaque: "", start: ps, months: 24, end: endOf(ps, 24), createdAt: ps, sample: true }); }
-    if (sr() < 0.05) { const ns = addDays(endOf(start, months), 1); out.push({ id: "a" + out.length, benchId: b.id, donor: pick(orgs), email: "", anonymous: false, plaque: "DONATED BY\n" + pick(orgs).toUpperCase(), start: ns, months: 12, end: endOf(ns, 12), createdAt: TODAY, sample: true }); }
+    out.push({ id: "a" + out.length, benchId: b.id, donor, email: "", anonymous: sr() < 0.1, plaque: pick(lines)(donor.includes(" ") && sr() < .5 ? honoree : donor).toUpperCase(), start, end: endOf(start, months), createdAt: start, sample: true });
+    if (sr() < 0.3) { const ps = addMonths(start, -24); out.push({ id: "a" + out.length, benchId: b.id, donor: `${pick(first)} ${pick(last)}`, email: "", anonymous: false, plaque: "", start: ps, end: endOf(ps, 24), createdAt: ps, sample: true }); }
+    if (sr() < 0.05) { const ns = addDays(endOf(start, months), 1); out.push({ id: "a" + out.length, benchId: b.id, donor: pick(orgs), email: "", anonymous: false, plaque: "DONATED BY\n" + pick(orgs).toUpperCase(), start: ns, end: endOf(ns, 12), createdAt: TODAY, sample: true }); }
   }
   return out;
 }
 
+/* ---------- accounts (demo: stored locally, passwords salted + SHA-256 hashed) ---------- */
+async function hash(pw, salt) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(salt + ":" + pw));
+  return [...new Uint8Array(buf)].map(x => x.toString(16).padStart(2, "0")).join("");
+}
+async function signUp(name, email, pw) {
+  email = email.toLowerCase();
+  if (users.some(u => u.email === email)) throw "An account with that email already exists. Sign in instead.";
+  const salt = [...crypto.getRandomValues(new Uint32Array(4))].join("-");
+  const u = { id: "u" + Date.now().toString(36), name, email, salt, hash: await hash(pw, salt), createdAt: TODAY };
+  users.push(u); write(USERS_KEY, users); setMe(u);
+}
+async function signIn(email, pw) {
+  const u = users.find(x => x.email === email.toLowerCase());
+  if (!u || u.hash !== await hash(pw, u.salt)) throw "That email and password don't match an account.";
+  setMe(u);
+}
+function setMe(u) { me = u; write(SESSION_KEY, u ? u.id : null); render(); }
+
 /* ---------- derived status ---------- */
-function termsFor(id) { return adoptions.filter(a => a.benchId === id).sort((a, b) => a.start.localeCompare(b.start)); }
+const live = () => adoptions.filter(a => !a.voided);
+function termsFor(id) { return live().filter(a => a.benchId === id).sort((a, b) => a.start.localeCompare(b.start)); }
 function statusOf(id) {
   const terms = termsFor(id);
   const current = terms.find(a => a.start <= TODAY && TODAY <= a.end) || null;
@@ -238,21 +307,38 @@ function statusOf(id) {
   else if (upcoming.length) status = "reserved";
   return { status, current, upcoming, past };
 }
-// earliest date a new term could begin: today, or the day after the last booked term that is still running/ahead
+// first open day on or after today
 function earliestStart(id) {
-  const ends = termsFor(id).filter(a => a.end >= TODAY).map(a => a.end).sort();
-  return ends.length ? addDays(ends[ends.length - 1], 1) : TODAY;
+  let d = TODAY;
+  for (const t of termsFor(id)) if (t.start <= d && d <= t.end) d = addDays(t.end, 1);
+  return d;
+}
+// last day a term starting on `start` may run before it hits the next booking ("" = no limit)
+function latestEnd(id, start) {
+  const next = termsFor(id).find(a => a.start > start);
+  return next ? addDays(next.start, -1) : "";
 }
 function overlaps(id, start, end) { return termsFor(id).find(a => a.start <= end && start <= a.end); }
 
-const STATUS = {
-  available: "Available", adopted: "Adopted", expiring: `Ends within ${EXPIRING_DAYS} days`, reserved: "Reserved (starts later)",
-};
+function cancelAdoption(aid) {
+  const a = adoptions.find(x => x.id === aid);
+  if (!a || !me || a.userId !== me.id || a.end < TODAY) return;
+  // not started yet: drop it entirely; already running: end it yesterday so the bench is open today
+  if (a.start >= TODAY) a.voided = true; else a.end = addDays(TODAY, -1);
+  a.cancelledAt = TODAY;
+  confirming = null;
+  save(); render();
+  toast(`Cancelled your adoption of ${a.benchId}. The bench is open again.`);
+}
+
+const STATUS = { available: "Available", adopted: "Adopted", expiring: `Ends within ${EXPIRING_DAYS} days`, reserved: "Reserved (starts later)" };
 const SHORT = { available: "Available", adopted: "Adopted", expiring: "Ending soon", reserved: "Reserved" };
 const publicName = a => a.anonymous ? "Anonymous donor" : a.donor;
 
 /* ---------- UI state ---------- */
 let state = { view: "map", filter: "all", q: "", sel: null };
+let confirming = null;      // adoption id awaiting "yes, cancel"
+let authMode = "signup";
 try { const v = localStorage.getItem(KEY + ":view"); if (v === "list" || v === "map") state.view = v; } catch (e) {}
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -265,12 +351,19 @@ function matches(b, s) {
   return termsFor(b.id).some(a => !a.anonymous && a.donor.toLowerCase().includes(q));
 }
 
+const myActive = () => me ? live().filter(a => a.userId === me.id && a.end >= TODAY) : [];
+
+function renderAccount() {
+  $("account").innerHTML = me
+    ? `<span>Signed in as <b>${esc(me.name)}</b></span><button class="btn-ghost" data-act="mine">My adoptions (${myActive().length})</button><button class="linkbtn" data-act="signout">Sign out</button>`
+    : `<button class="btn-ghost" data-act="signin">Sign in</button><button class="btn-ghost primary" data-act="signup">Create account</button>`;
+}
+
 function renderStats(all) {
   const c = { available: 0, adopted: 0, expiring: 0, reserved: 0 };
   all.forEach(x => c[x.s.status]++);
-  const adopted = c.adopted + c.expiring;
   $("stats").innerHTML = [
-    [BENCHES.length, "benches"], [adopted, "adopted now"], [c.available + c.reserved, "open to adopt"], [c.expiring, `ending in ${EXPIRING_DAYS} days`],
+    [BENCHES.length, "benches"], [c.adopted + c.expiring, "adopted now"], [c.available + c.reserved, "open to adopt"], [c.expiring, `ending in ${EXPIRING_DAYS} days`],
   ].map(([n, l]) => `<div class="stat"><b>${n}</b><span>${l}</span></div>`).join("");
   $("chips").innerHTML = [["all", "All", BENCHES.length], ...Object.keys(SHORT).map(k => [k, SHORT[k], c[k]])]
     .map(([k, l, n]) => `<button class="chip" data-f="${k}" aria-pressed="${state.filter === k}">${k === "all" ? "" : `<span class="sw s-${k}"></span>`}${l} <span class="label" style="letter-spacing:0">${n}</span></button>`).join("");
@@ -278,11 +371,13 @@ function renderStats(all) {
 
 function render() {
   const all = BENCHES.map(b => ({ b, s: statusOf(b.id) }));
+  renderAccount();
   renderStats(all);
   $("v-map").setAttribute("aria-pressed", state.view === "map");
   $("v-list").setAttribute("aria-pressed", state.view === "list");
   state.view === "map" ? renderMap(all) : renderList(all);
   renderPanel();
+  if ($("mine-dlg").open) renderMine();
 }
 
 function renderMap(all) {
@@ -307,10 +402,19 @@ function renderList(all) {
   }</tbody></table></div>${rows.length > LIMIT ? `<p class="more">Showing ${LIMIT} of ${rows.length}. Search or filter to narrow down.</p>` : rows.length ? "" : `<p class="more">No benches match. Try another search or filter.</p>`}`;
 }
 
+// cancel control shared by the bench panel and the "My adoptions" dialog
+function cancelControl(a) {
+  if (confirming === a.id) {
+    const when = a.start >= TODAY ? "This reservation will be removed." : "Your adoption ends today and the bench opens to others.";
+    return `<div class="confirm"><span>${when}</span><button class="btn-ghost danger" data-cancel-yes="${a.id}">Yes, cancel</button><button class="linkbtn" data-cancel-no>Keep it</button></div>`;
+  }
+  return `<div><button class="btn-ghost danger" data-cancel="${a.id}">Cancel adoption</button></div>`;
+}
+
 function renderPanel() {
   const p = $("panel");
   if (!state.sel) {
-    p.innerHTML = `<div><div class="label">Bench details</div><h3 style="margin-top:6px">Select a bench</h3></div><p class="empty">Click any square to see who has adopted a bench, or to adopt one yourself. Hollow squares are open.</p>
+    p.innerHTML = `<div><div class="label">Bench details</div><h3 style="margin-top:6px">Select a bench</h3></div><p class="empty">Click any square to see who has adopted a bench, or to reserve one yourself. Hollow squares are open.</p>
     <div style="display:grid;gap:6px;font-size:13.5px">${Object.keys(STATUS).map(k => `<div style="display:flex;gap:8px;align-items:center"><span class="sw s-${k}"></span>${STATUS[k]}</div>`).join("")}</div>`;
     return;
   }
@@ -321,59 +425,142 @@ function renderPanel() {
   if (cur) {
     const left = daysBetween(TODAY, cur.end);
     html += `${cur.plaque ? `<div class="plaque-wrap"><div class="plaque">${esc(cur.plaque)}</div></div>` : ""}
-    <dl><dt>Adopted by</dt><dd>${esc(publicName(cur))}</dd><dt>Term</dt><dd>${termLabel(cur.months)}</dd><dt>From</dt><dd>${fmt(cur.start)}</dd><dt>Through</dt><dd>${fmt(cur.end)}</dd><dt>Remaining</dt><dd>${left >= 60 ? Math.round(left / 30.4) + " months" : left + " days"}</dd></dl>`;
+    <dl><dt>Adopted by</dt><dd>${esc(publicName(cur))}</dd><dt>Term</dt><dd>${durLabel(cur.start, cur.end)}</dd><dt>From</dt><dd>${fmt(cur.start)}</dd><dt>Through</dt><dd>${fmt(cur.end)}</dd><dt>Remaining</dt><dd>${left >= 60 ? Math.round(left / 30.4) + " months" : left + 1 + " days"}</dd></dl>`;
   }
+  const mine = me ? termsFor(b.id).filter(a => a.userId === me.id && a.end >= TODAY) : [];
+  if (mine.length) html += mine.map(a => `<div class="yours"><div><b>Your ${a.start > TODAY ? "reservation" : "adoption"}</b><br><span style="color:var(--muted)">${fmt(a.start)} – ${fmt(a.end)} · ${durLabel(a.start, a.end)}</span></div>${cancelControl(a)}</div>`).join("");
   if (s.upcoming.length) html += `<div><div class="label" style="margin-bottom:6px">Reserved</div><ul class="history">${s.upcoming.map(a => `<li><b>${esc(publicName(a))}</b><span>${fmt(a.start)} – ${fmt(a.end)}</span></li>`).join("")}</ul></div>`;
-  if (s.past.length) html += `<div><div class="label" style="margin-bottom:6px">Past adoptions</div><ul class="history">${s.past.map(a => `<li><b>${esc(publicName(a))}</b><span>${fmt(a.start)} – ${fmt(a.end)}</span></li>`).join("")}</ul></div>`;
+  if (s.past.length) html += `<div><div class="label" style="margin-bottom:6px">Past adoptions</div><ul class="history">${s.past.map(a => `<li><b>${esc(publicName(a))}${a.cancelledAt ? " (cancelled)" : ""}</b><span>${fmt(a.start)} – ${fmt(a.end)}</span></li>`).join("")}</ul></div>`;
 
-  const next = earliest > TODAY;
+  const busy = earliest > TODAY;
+  if (!me) {
+    html += `<div class="gate"><h3 style="font-size:17px">Reserve this bench</h3><p>${busy ? `Open from ${fmt(earliest)}. ` : ""}Create a free account to reserve a bench, and to cancel it later if your plans change.</p>
+      <div class="actions"><button class="btn-ghost primary" data-act="signup">Create account</button><button class="btn-ghost" data-act="signin">Sign in</button></div></div>`;
+    p.innerHTML = html;
+    return;
+  }
+  const max0 = latestEnd(b.id, earliest);
+  let end0 = endOf(earliest, 12); if (max0 && end0 > max0) end0 = max0;
   html += `<form id="adopt" novalidate>
-    <h3>${next ? "Reserve the next term" : "Adopt this bench"}</h3>
-    ${next ? `<p class="summary" style="margin:0">This bench is spoken for until ${fmt(addDays(earliest, -1))}. You can reserve it from ${fmt(earliest)}.</p>` : ""}
-    <div class="field"><label for="f-name">Your name or organization</label><input id="f-name" required maxlength="80" autocomplete="name"></div>
-    <div class="field"><label for="f-email">Email</label><input id="f-email" type="email" required autocomplete="email"><span class="hint">Private. Used only for renewal reminders.</span></div>
+    <h3>Reserve this bench</h3>
+    ${busy ? `<p class="summary" style="margin:0">Booked until ${fmt(addDays(earliest, -1))}. The next open day is ${fmt(earliest)}.</p>` : ""}
     <div class="row">
-      <div class="field"><label for="f-start">Start date</label><input id="f-start" type="date" min="${earliest}" value="${earliest}" required></div>
-      <div class="field"><label for="f-term">Term</label><select id="f-term">${[6, 12, 24, 36, 60, 120].map(m => `<option value="${m}"${m === 12 ? " selected" : ""}>${termLabel(m)}</option>`).join("")}</select></div>
+      <div class="field"><label for="f-start">First day</label><input id="f-start" type="date" min="${TODAY}" value="${earliest}" required></div>
+      <div class="field"><label for="f-end">Last day</label><input id="f-end" type="date" min="${earliest}" ${max0 ? `max="${max0}"` : ""} value="${end0}" required></div>
     </div>
+    <div class="presets" aria-label="Quick lengths">${[["1 week", s => addDays(s, 6)], ["1 month", s => endOf(s, 1)], ["6 months", s => endOf(s, 6)], ["1 year", s => endOf(s, 12)], ["5 years", s => endOf(s, 60)]].map(([l], i) => `<button type="button" class="preset" data-preset="${i}">${l}</button>`).join("")}</div>
+    <div class="field"><label for="f-name">Name shown on the registry</label><input id="f-name" maxlength="80" value="${esc(me.name)}"></div>
     <div class="field"><label for="f-plaque">Plaque inscription (optional)</label><textarea id="f-plaque" rows="3" maxlength="100" placeholder="IN MEMORY OF&#10;ROSA DELGADO"></textarea><span class="hint">Up to 3 lines, 32 characters each. Engraved in capitals.</span></div>
     <label class="check"><input type="checkbox" id="f-anon"> List me as “Anonymous donor” on this site</label>
     <p class="summary" id="f-sum" style="margin:0"></p>
     <p class="err" id="f-err" hidden></p>
-    <button class="btn" type="submit">${next ? "Reserve bench" : "Adopt bench"} ${b.id}</button>
+    <button class="btn" type="submit">Reserve bench ${b.id}</button>
   </form>`;
   p.innerHTML = html;
-  const upd = () => { const st = $("f-start").value, m = +$("f-term").value; $("f-sum").textContent = st ? `${termLabel(m)}: ${fmt(st)} through ${fmt(endOf(st, m))}` : "Pick a start date."; };
-  $("f-start").addEventListener("input", upd); $("f-term").addEventListener("change", upd); upd();
+
+  const PRESETS = [s => addDays(s, 6), s => endOf(s, 1), s => endOf(s, 6), s => endOf(s, 12), s => endOf(s, 60)];
+  const fs = $("f-start"), fe = $("f-end");
+  const upd = () => {
+    const st = fs.value, max = st ? latestEnd(b.id, st) : "";
+    fe.min = st || TODAY;
+    if (max) fe.max = max; else fe.removeAttribute("max");
+    if (st && fe.value && fe.value < st) fe.value = st;
+    if (max && fe.value > max) fe.value = max;
+    $("f-sum").textContent = st && fe.value ? `${durLabel(st, fe.value)}: ${fmt(st)} through ${fmt(fe.value)}${max ? ` (next booking starts ${fmt(addDays(max, 1))})` : ""}` : "Pick a first and last day.";
+  };
+  fs.addEventListener("input", upd); fe.addEventListener("input", upd);
+  p.querySelectorAll("[data-preset]").forEach(btn => btn.addEventListener("click", () => { if (fs.value) { fe.value = PRESETS[+btn.dataset.preset](fs.value); upd(); } }));
+  upd();
   $("adopt").addEventListener("submit", e => { e.preventDefault(); submit(b.id); });
 }
 
 function submit(id) {
-  const name = $("f-name").value.trim(), email = $("f-email").value.trim(), start = $("f-start").value, months = +$("f-term").value;
+  const err = msg => { $("f-err").textContent = msg; $("f-err").hidden = false; };
+  if (!me) return err("Sign in to reserve a bench.");
+  const name = $("f-name").value.trim() || me.name, start = $("f-start").value, end = $("f-end").value;
   const plaque = $("f-plaque").value.trim().toUpperCase();
   const lines = plaque ? plaque.split("\n") : [];
-  const err = msg => { $("f-err").textContent = msg; $("f-err").hidden = false; };
-  if (!name) return err("Enter your name or organization.");
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return err("Enter a valid email address, like name@example.com.");
-  if (!start) return err("Pick a start date.");
-  if (start < TODAY) return err("The start date can't be in the past.");
+  if (!start || !end) return err("Pick a first and last day.");
+  if (start < TODAY) return err("The first day can't be in the past.");
+  if (end < start) return err("The last day must be on or after the first day.");
   if (lines.length > 3 || lines.some(l => l.length > 32)) return err("The plaque fits 3 lines of up to 32 characters. Shorten the inscription.");
-  const end = endOf(start, months);
   const clash = overlaps(id, start, end);
-  if (clash) return err(`That overlaps an existing term (${fmt(clash.start)} – ${fmt(clash.end)}). Start on ${fmt(earliestStart(id))} or later.`);
-  adoptions.push({ id: "u" + Date.now(), benchId: id, donor: name, email, anonymous: $("f-anon").checked, plaque, start, months, end, createdAt: TODAY });
+  if (clash) return err(`Those dates overlap an existing booking (${fmt(clash.start)} – ${fmt(clash.end)}). Choose dates outside it.`);
+  adoptions.push({ id: "m" + Date.now(), benchId: id, userId: me.id, donor: name, email: me.email, anonymous: $("f-anon").checked, plaque, start, end, createdAt: TODAY });
   save(); render();
-  toast(`${start > TODAY ? "Reserved" : "Adopted"} ${id} for ${termLabel(months)}, through ${fmt(end)}. Thank you!`);
+  toast(`Reserved ${id} for ${durLabel(start, end)}, ${fmt(start)} through ${fmt(end)}. Thank you!`);
 }
 
-let tt;
-function toast(msg) { const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(tt); tt = setTimeout(() => t.hidden = true, 4500); }
+/* ---------- dialogs ---------- */
+function openAuth(mode) {
+  authMode = mode;
+  const up = mode === "signup";
+  $("auth-form").innerHTML = `
+    <div class="dlg-head"><h3 id="auth-title" style="font-size:19px">${up ? "Create an account" : "Sign in"}</h3><button type="button" class="x" data-close aria-label="Close">×</button></div>
+    ${up ? `<div class="field"><label for="a-name">Full name</label><input id="a-name" autocomplete="name" maxlength="80" required></div>` : ""}
+    <div class="field"><label for="a-email">Email</label><input id="a-email" type="email" autocomplete="email" required></div>
+    <div class="field"><label for="a-pw">Password</label><input id="a-pw" type="password" autocomplete="${up ? "new-password" : "current-password"}" required>${up ? `<span class="hint">At least 8 characters.</span>` : ""}</div>
+    <p class="err" id="a-err" hidden></p>
+    <button class="btn" type="submit">${up ? "Create account" : "Sign in"}</button>
+    <p class="switch">${up ? `Already have an account? <button type="button" class="linkbtn" data-act="signin">Sign in</button>` : `New here? <button type="button" class="linkbtn" data-act="signup">Create an account</button>`}</p>`;
+  if (!$("auth-dlg").open) $("auth-dlg").showModal();
+  $(up ? "a-name" : "a-email").focus();
+}
+$("auth-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const err = m => { $("a-err").textContent = m; $("a-err").hidden = false; };
+  const email = $("a-email").value.trim(), pw = $("a-pw").value;
+  try {
+    if (authMode === "signup") {
+      const name = $("a-name").value.trim();
+      if (!name) return err("Enter your full name.");
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return err("Enter a valid email address, like name@example.com.");
+      if (pw.length < 8) return err("Use a password of at least 8 characters.");
+      await signUp(name, email, pw);
+      toast(`Welcome, ${name}. You can now reserve benches.`);
+    } else {
+      await signIn(email, pw);
+      toast(`Signed in as ${me.name}.`);
+    }
+    $("auth-dlg").close();
+  } catch (m) { err(typeof m === "string" ? m : "Something went wrong. Try again."); }
+});
+$("auth-form").addEventListener("click", e => {
+  if (e.target.closest("[data-close]")) $("auth-dlg").close();
+  const a = e.target.closest("[data-act]"); if (a) openAuth(a.dataset.act);
+});
+
+function renderMine() {
+  const mine = me ? live().filter(a => a.userId === me.id).sort((a, b) => b.start.localeCompare(a.start)) : [];
+  $("mine-list").innerHTML = mine.length ? mine.map(a => {
+    const b = BY_ID[a.benchId], done = a.end < TODAY;
+    const tag = done ? (a.cancelledAt ? "Cancelled" : "Ended") : a.start > TODAY ? "Upcoming" : "Active";
+    return `<li class="${done ? "past" : ""}"><div class="top"><span><span class="mono">${a.benchId}</span> · ${esc(b.zoneName)}</span><span class="label">${tag}</span></div>
+      <span class="dates">${fmt(a.start)} – ${fmt(a.end)} · ${durLabel(a.start, a.end)}</span>${done ? "" : cancelControl(a)}</li>`;
+  }).join("") : `<li><p class="empty" style="margin:0">You haven't reserved any benches yet. Pick an open bench to get started.</p></li>`;
+}
+$("mine-close").addEventListener("click", () => $("mine-dlg").close());
 
 /* ---------- events ---------- */
+let tt;
+function toast(msg) { const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(tt); tt = setTimeout(() => t.hidden = true, 4500); }
 function select(id) {
-  state.sel = id; render();
+  state.sel = id; confirming = null; render();
   if (window.matchMedia("(max-width:900px)").matches) $("panel").scrollIntoView({ behavior: "smooth", block: "start" });
 }
+document.addEventListener("click", e => {
+  const act = e.target.closest("#account [data-act], #panel [data-act]");
+  if (act) {
+    const a = act.dataset.act;
+    if (a === "signin" || a === "signup") openAuth(a);
+    else if (a === "signout") { setMe(null); toast("Signed out."); }
+    else if (a === "mine") { renderMine(); $("mine-dlg").showModal(); }
+    return;
+  }
+  const c = e.target.closest("[data-cancel]"); if (c) { confirming = c.dataset.cancel; render(); return; }
+  const y = e.target.closest("[data-cancel-yes]"); if (y) { cancelAdoption(y.dataset.cancelYes); return; }
+  if (e.target.closest("[data-cancel-no]")) { confirming = null; render(); }
+});
 $("view").addEventListener("click", e => { const el = e.target.closest("[data-id]"); if (el) select(el.dataset.id); });
 $("view").addEventListener("keydown", e => { if (e.key === "Enter") { const el = e.target.closest("tr[data-id]"); if (el) select(el.dataset.id); } });
 $("chips").addEventListener("click", e => { const el = e.target.closest("[data-f]"); if (el) { state.filter = el.dataset.f; render(); } });
@@ -381,7 +568,11 @@ $("q").addEventListener("input", e => { state.q = e.target.value; render(); });
 const setView = v => { state.view = v; try { localStorage.setItem(KEY + ":view", v); } catch (e) {} render(); };
 $("v-map").addEventListener("click", () => setView("map"));
 $("v-list").addEventListener("click", () => setView("list"));
-$("reset").addEventListener("click", () => { adoptions = seed(); save(); state.sel = null; render(); toast("Sample data restored."); });
+$("reset").addEventListener("click", () => {
+  // keep accounts and their own bookings; restore the sample donors around them
+  const kept = adoptions.filter(a => a.userId);
+  adoptions = [...seed(), ...kept]; save(); state.sel = null; render(); toast("Sample data restored.");
+});
 
 render();
 })();
