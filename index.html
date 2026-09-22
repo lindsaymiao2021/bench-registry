@@ -182,6 +182,8 @@ dialog form{border-top:0;padding-top:0}
 .leaflet-control-attribution{background:var(--surface);opacity:.9;padding:1px 6px;color:var(--muted);font-size:11px;border-top-left-radius:4px}
 .leaflet-control-attribution a{color:var(--ink)}
 .leaflet-tooltip{position:absolute;padding:4px 8px;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:4px;white-space:nowrap;pointer-events:none;box-shadow:0 2px 6px rgba(0,0,0,.2);font-size:12.5px}
+.leaflet-tooltip.zone-label{display:none}
+.show-labels .leaflet-tooltip.zone-label{display:block}
 .leaflet-tooltip.zone-label{background:transparent;border:0;box-shadow:none;font:700 11px/1.2 var(--display);text-transform:uppercase;letter-spacing:.06em;color:var(--ink);text-shadow:0 0 3px var(--surface),0 0 3px var(--surface)}
 </style>
 
@@ -289,19 +291,19 @@ const BY_ID = Object.fromEntries(BENCHES.map(b => [b.id, b]));
 /* ---------- approximate bench positions (demo; real GPS points would replace these) ---------- */
 // open areas: centre + radius (degrees lat, lng); trails: a polyline benches are spaced along
 const GEO = {
-  PG: { c: [40.8887, -73.8934], r: [0.0011, 0.0022] },
-  LK: { c: [40.8952, -73.8912], r: [0.0009, 0.0011] },
+  PG: { c: [40.8887, -73.8934], r: [0.0016, 0.0030] },
+  LK: { c: [40.8952, -73.8912], r: [0.0014, 0.0018] },
   PT: { line: [[40.8965, -73.8897], [40.9020, -73.8893], [40.9075, -73.8886], [40.9120, -73.8878]] },
-  SH: { c: [40.8878, -73.8852], r: [0.0007, 0.0011] },
+  SH: { c: [40.8878, -73.8852], r: [0.0012, 0.0018] },
   AQ: { line: [[40.8905, -73.8838], [40.8975, -73.8826], [40.9045, -73.8815], [40.9115, -73.8803]] },
   TB: { line: [[40.8972, -73.8938], [40.9025, -73.8950], [40.9080, -73.8958], [40.9125, -73.8962]] },
-  ST: { c: [40.8874, -73.8978], r: [0.0005, 0.0007] },
-  NW: { c: [40.9040, -73.8990], r: [0.0022, 0.0010] },
-  JK: { c: [40.8978, -73.8912], r: [0.0008, 0.0010] },
-  HM: { c: [40.8906, -73.8962], r: [0.0004, 0.0005] },
-  VH: { c: [40.8932, -73.8978], r: [0.0005, 0.0006] },
-  IF: { c: [40.8990, -73.8760], r: [0.0007, 0.0010] },
-  GC: { c: [40.8943, -73.8872], r: [0.0003, 0.0004] },
+  ST: { c: [40.8874, -73.8978], r: [0.0009, 0.0012] },
+  NW: { c: [40.9040, -73.8990], r: [0.0030, 0.0016] },
+  JK: { c: [40.8978, -73.8912], r: [0.0012, 0.0016] },
+  HM: { c: [40.8906, -73.8962], r: [0.0007, 0.0009] },
+  VH: { c: [40.8932, -73.8978], r: [0.0009, 0.0011] },
+  IF: { c: [40.8990, -73.8760], r: [0.0011, 0.0016] },
+  GC: { c: [40.8943, -73.8872], r: [0.0006, 0.0008] },
 };
 {
   const gr = rng(99);
@@ -483,24 +485,52 @@ function renderMap(all) {
 
 // Leaflet map, built once on first use and restyled on every render
 let map = null, markers = {};
-const PARK = [[40.8862, -73.8995], [40.8905, -73.9012], [40.9008, -73.9028], [40.9133, -73.9010], [40.9138, -73.8792], [40.9040, -73.8722], [40.8965, -73.8706], [40.8905, -73.8760], [40.8860, -73.8830], [40.8852, -73.8925]];
 function ensureMap() {
   if (map || !window.L) return;
   map = L.map("geo", { preferCanvas: true, scrollWheelZoom: false, zoomSnap: 0.5 });
   L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' }).addTo(map);
-  const green = getComputedStyle(document.documentElement).getPropertyValue("--green").trim();
-  L.polygon(PARK, { color: green, weight: 1.5, fillColor: green, fillOpacity: 0.06, interactive: false }).addTo(map);
   for (const [code, name] of ZONES) {
     const g = GEO[code], at = g.c || g.line[Math.floor(g.line.length / 2)];
     L.tooltip({ permanent: true, direction: "center", className: "zone-label", interactive: false }).setLatLng(at).setContent(name).addTo(map);
   }
-  for (const b of BENCHES) {
-    const m = L.circleMarker([b.lat, b.lng], { radius: 5 }).addTo(map);
-    m.bindTooltip("", { direction: "top", offset: [0, -6] });
-    m.on("click", () => select(b.id));
-    markers[b.id] = m;
-  }
+  for (const b of BENCHES) markers[b.id] = L.circleMarker([b.lat, b.lng], { radius: 5, interactive: false }).addTo(map);
+  // Hit-testing is done here rather than per marker: pick the nearest bench within a
+  // finger-sized radius, which also makes the small dots easy to tap on a phone.
+  const geoEl = $("geo"), tip = L.tooltip({ direction: "top", offset: [0, -8] });
+  const nearest = e => {
+    const r = geoEl.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+    let best = null, bestD = 13 * 13;
+    for (const b of BENCHES) {
+      const p = map.latLngToContainerPoint([b.lat, b.lng]), d = (p.x - x) ** 2 + (p.y - y) ** 2;
+      if (d < bestD) { bestD = d; best = b; }
+    }
+    return best;
+  };
+  let down = null, hoverQueued = false;
+  geoEl.addEventListener("pointerdown", e => { down = [e.clientX, e.clientY]; });
+  geoEl.addEventListener("click", e => {
+    if (e.target.closest(".leaflet-control")) return;
+    if (down && Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 5) return; // was a drag
+    const b = nearest(e); if (b) select(b.id);
+  });
+  geoEl.addEventListener("pointermove", e => {
+    if (hoverQueued || e.pointerType === "touch") return;
+    hoverQueued = true;
+    requestAnimationFrame(() => {
+      hoverQueued = false;
+      const b = nearest(e);
+      geoEl.style.cursor = b ? "pointer" : "";
+      if (!b) { map.closeTooltip(tip); return; }
+      const s = statusOf(b.id);
+      tip.setLatLng([b.lat, b.lng]).setContent(esc(`${b.id} · ${SHORT[s.status]}${s.current ? " — " + publicName(s.current) : ""}`));
+      if (!map.hasLayer(tip)) tip.addTo(map);
+    });
+  });
+  geoEl.addEventListener("pointerleave", () => map.closeTooltip(tip));
   map.fitBounds(L.latLngBounds(BENCHES.map(b => [b.lat, b.lng])).pad(0.06));
+  // area names only once zoomed in far enough for them not to overlap
+  const labels = () => $("geo").classList.toggle("show-labels", map.getZoom() >= 16);
+  map.on("zoomend", labels); labels();
 }
 function renderGeo(all) {
   ensureMap();
@@ -517,7 +547,6 @@ function renderGeo(all) {
       fillColor: s.status === "available" ? tok("--surface") : C[s.status],
       fillOpacity: on ? (s.status === "reserved" ? 0.4 : 0.95) : 0.1,
     });
-    m.setTooltipContent(esc(`${b.id} · ${SHORT[s.status]}${s.current ? " — " + publicName(s.current) : ""}`));
     if (sel) m.bringToFront();
   }
 }
@@ -543,7 +572,7 @@ function cancelControl(a) {
 function renderPanel() {
   const p = $("panel");
   if (!state.sel) {
-    p.innerHTML = `<div><div class="label">Bench details</div><h3 style="margin-top:6px">Select a bench</h3></div><p class="empty">Click any square to see who has adopted a bench, or to reserve one yourself. Hollow squares are open.</p>
+    p.innerHTML = `<div><div class="label">Bench details</div><h3 style="margin-top:6px">Select a bench</h3></div><p class="empty">Click any bench to see who has adopted it, or to reserve it yourself. Hollow ones are open.</p>
     <div style="display:grid;gap:6px;font-size:13.5px">${Object.keys(STATUS).map(k => `<div style="display:flex;gap:8px;align-items:center"><span class="sw s-${k}"></span>${STATUS[k]}</div>`).join("")}</div>`;
     return;
   }
