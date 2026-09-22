@@ -6,6 +6,7 @@ A single-page app that serves as the one source of truth for Van Cortlandt Park'
 
 ## What it does
 - **Browse:** all 520 benches, grouped by park area. Each bench is a square coloured by its status (available, adopted, ending within 90 days, or reserved). There's also a searchable list view.
+- **Map:** every bench plotted on an OpenStreetMap map of the park, coloured by status. The status filters and search dim the benches that don't match, and clicking a bench opens its details. Positions are approximate, generated within each area or along each trail.
 - **Look up a bench:** see who adopted it (or "Anonymous donor"), the dates and length of the term, the plaque inscription, any future reservations, and past adoptions.
 - **Accounts:** you must create an account (name, email, password) or sign in before you can reserve a bench.
 - **Reserve any length of time:** pick a first day and a last day from calendar date pickers. Quick buttons fill in 1 week, 1 month, 6 months, 1 year or 5 years. The calendar won't let the last day run into the next booking.
@@ -28,4 +29,4 @@ A single-page app that serves as the one source of truth for Van Cortlandt Park'
   - server-side sessions, and password hashing with bcrypt or argon2;
   - a database, for example Postgres with an exclusion constraint on (bench, date range), so the database itself enforces the no-overlap rule;
   - cancellation checked on the server against the signed-in user.
-- **Next steps:** staff tools (edit or cancel any adoption, CSV export), renewal reminder emails, and a real map using bench GPS coordinates.
+- **Next steps:** staff tools (edit or cancel any adoption, CSV export), renewal reminder emails, and real GPS coordinates for each bench in place of the approximate positions.

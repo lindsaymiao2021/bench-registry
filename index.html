@@ -6,7 +6,7 @@
   --ground:#F2F3EE; --surface:#FFFFFF; --ink:#1F2A22; --muted:#5E6A61; --line:#D9DDD3;
   --green:#2E6B3F; --green-soft:#DCE9DF; --amber:#C4861A; --amber-soft:#F6E7CB;
   --wood:#8A5A33; --brass:#B8943F; --brass-2:#E3CC8A; --brass-ink:#3B2E10;
-  --danger:#A23B2A; --focus:#1E5FA8;
+  --danger:#A23B2A; --focus:#1E5FA8; --tiles:none; --map-ground:#E3E8DE;
   --display:"Overpass","Helvetica Neue",Arial,sans-serif;
   --body:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
   --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
@@ -17,7 +17,7 @@
     --ground:#151B17; --surface:#1D2520; --ink:#E7EDE7; --muted:#9AA79E; --line:#33403A;
     --green:#5FAE78; --green-soft:#23372A; --amber:#E0A544; --amber-soft:#3A2F1C;
     --wood:#C08A5C; --brass:#C9A553; --brass-2:#8E7433; --brass-ink:#FFF4D6;
-    --danger:#E07A66; --focus:#7FB2F0;
+    --danger:#E07A66; --focus:#7FB2F0; --tiles:brightness(.62) contrast(1.1) saturate(.7); --map-ground:#1A221D;
   }
 }
 :root[data-theme="dark"]{
@@ -25,7 +25,7 @@
   --ground:#151B17; --surface:#1D2520; --ink:#E7EDE7; --muted:#9AA79E; --line:#33403A;
   --green:#5FAE78; --green-soft:#23372A; --amber:#E0A544; --amber-soft:#3A2F1C;
   --wood:#C08A5C; --brass:#C9A553; --brass-2:#8E7433; --brass-ink:#FFF4D6;
-  --danger:#E07A66; --focus:#7FB2F0;
+  --danger:#E07A66; --focus:#7FB2F0; --tiles:brightness(.62) contrast(1.1) saturate(.7); --map-ground:#1A221D;
 }
 *{box-sizing:border-box}
 body{background:var(--ground);color:var(--ink);font:15px/1.5 var(--body);padding-inline:16px;padding-block:0 48px}
@@ -148,6 +148,41 @@ dialog form{border-top:0;padding-top:0}
 .mine .past{opacity:.6}
 .confirm{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:13px;background:var(--ground);border-radius:5px;padding:8px 10px}
 .yours{border:1px solid var(--green);border-radius:6px;padding:12px;display:flex;flex-direction:column;gap:8px;font-size:14px}
+
+/* geographic map (Leaflet essentials, inlined) */
+#geo{height:min(620px,72vh);min-height:360px;border:1px solid var(--line);border-radius:8px}
+.geo-foot{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;justify-content:space-between;margin-top:10px;font-size:13px;color:var(--muted)}
+.geo-legend{display:flex;flex-wrap:wrap;gap:6px 14px}
+.geo-legend span{display:inline-flex;align-items:center;gap:6px}
+.geo-legend i{width:11px;height:11px;border-radius:50%;display:inline-block}
+.geo-msg{padding:24px;color:var(--muted)}
+.leaflet-pane,.leaflet-tile,.leaflet-marker-icon,.leaflet-marker-shadow,.leaflet-tile-container,.leaflet-pane>svg,.leaflet-pane>canvas,.leaflet-zoom-box,.leaflet-image-layer,.leaflet-layer{position:absolute;left:0;top:0}
+.leaflet-container{overflow:hidden;position:relative;background:var(--map-ground);font:12px/1.4 var(--body);-webkit-tap-highlight-color:transparent}
+.leaflet-tile,.leaflet-marker-icon{user-select:none;-webkit-user-drag:none}
+.leaflet-container img.leaflet-tile{max-width:none!important;max-height:none!important;border:0}
+.leaflet-tile{visibility:hidden}.leaflet-tile-loaded{visibility:inherit}
+.leaflet-tile-pane{filter:var(--tiles)}
+.leaflet-pane{z-index:400}.leaflet-tile-pane{z-index:200}.leaflet-overlay-pane{z-index:400}.leaflet-marker-pane{z-index:600}.leaflet-tooltip-pane{z-index:650}.leaflet-popup-pane{z-index:700}
+.leaflet-map-pane canvas{z-index:100}.leaflet-map-pane svg{z-index:200}
+.leaflet-zoom-animated{transform-origin:0 0}
+.leaflet-zoom-anim .leaflet-zoom-animated{transition:transform .25s cubic-bezier(0,0,.25,1)}
+.leaflet-zoom-anim .leaflet-tile,.leaflet-pan-anim .leaflet-tile{transition:none}
+.leaflet-interactive{cursor:pointer}
+.leaflet-grab{cursor:grab}.leaflet-dragging .leaflet-grab{cursor:grabbing}
+.leaflet-control{position:relative;z-index:800;pointer-events:auto;float:left;clear:both}
+.leaflet-top,.leaflet-bottom{position:absolute;z-index:1000;pointer-events:none}
+.leaflet-top{top:0}.leaflet-right{right:0}.leaflet-bottom{bottom:0}.leaflet-left{left:0}
+.leaflet-right .leaflet-control{float:right}
+.leaflet-top .leaflet-control{margin-top:10px}.leaflet-bottom .leaflet-control{margin-bottom:0}.leaflet-left .leaflet-control{margin-left:10px}.leaflet-right .leaflet-control{margin-right:0}
+.leaflet-bar{border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--surface)}
+.leaflet-bar a{display:block;width:32px;height:32px;line-height:32px;text-align:center;text-decoration:none;color:var(--ink);background:var(--surface);font:600 18px/32px var(--body);border-bottom:1px solid var(--line)}
+.leaflet-bar a:last-child{border-bottom:0}
+.leaflet-bar a:hover{background:var(--ground)}
+.leaflet-bar a.leaflet-disabled{color:var(--line);cursor:default}
+.leaflet-control-attribution{background:var(--surface);opacity:.9;padding:1px 6px;color:var(--muted);font-size:11px;border-top-left-radius:4px}
+.leaflet-control-attribution a{color:var(--ink)}
+.leaflet-tooltip{position:absolute;padding:4px 8px;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:4px;white-space:nowrap;pointer-events:none;box-shadow:0 2px 6px rgba(0,0,0,.2);font-size:12.5px}
+.leaflet-tooltip.zone-label{background:transparent;border:0;box-shadow:none;font:700 11px/1.2 var(--display);text-transform:uppercase;letter-spacing:.06em;color:var(--ink);text-shadow:0 0 3px var(--surface),0 0 3px var(--surface)}
 </style>
 
 <div class="wrap">
@@ -167,13 +202,23 @@ dialog form{border-top:0;padding-top:0}
     <div class="seg" role="group" aria-label="View">
       <button id="v-map" aria-pressed="true">By area</button>
       <button id="v-list" aria-pressed="false">List</button>
+      <button id="v-geo" aria-pressed="false">Map</button>
     </div>
     <div class="chips" id="chips" role="group" aria-label="Filter by status"></div>
     <input class="search" id="q" type="search" placeholder="Search bench ID or donor…" aria-label="Search bench ID or donor">
   </div>
 
   <div class="main">
-    <section id="view" aria-live="polite"></section>
+    <section>
+      <div id="view" aria-live="polite"></div>
+      <div id="geo-wrap" hidden>
+        <div id="geo" aria-label="Map of benches in Van Cortlandt Park"></div>
+        <div class="geo-foot">
+          <div class="geo-legend" id="geo-legend"></div>
+          <span>Bench positions are approximate.</span>
+        </div>
+      </div>
+    </section>
     <aside id="panel" aria-label="Bench details"></aside>
   </div>
 
@@ -194,6 +239,7 @@ dialog form{border-top:0;padding-top:0}
 
 <div class="toast" id="toast" role="status" hidden></div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
 <script>
 (() => {
 /* ---------- dates (all ISO yyyy-mm-dd, computed in UTC) ---------- */
@@ -239,6 +285,44 @@ for (const [code, name, n] of ZONES)
   for (let i = 1; i <= n; i++)
     BENCHES.push({ id: `VC-${code}-${String(i).padStart(3, "0")}`, zone: code, zoneName: name, type: TYPES[Math.floor(r() ** 1.8 * TYPES.length)] });
 const BY_ID = Object.fromEntries(BENCHES.map(b => [b.id, b]));
+
+/* ---------- approximate bench positions (demo; real GPS points would replace these) ---------- */
+// open areas: centre + radius (degrees lat, lng); trails: a polyline benches are spaced along
+const GEO = {
+  PG: { c: [40.8887, -73.8934], r: [0.0011, 0.0022] },
+  LK: { c: [40.8952, -73.8912], r: [0.0009, 0.0011] },
+  PT: { line: [[40.8965, -73.8897], [40.9020, -73.8893], [40.9075, -73.8886], [40.9120, -73.8878]] },
+  SH: { c: [40.8878, -73.8852], r: [0.0007, 0.0011] },
+  AQ: { line: [[40.8905, -73.8838], [40.8975, -73.8826], [40.9045, -73.8815], [40.9115, -73.8803]] },
+  TB: { line: [[40.8972, -73.8938], [40.9025, -73.8950], [40.9080, -73.8958], [40.9125, -73.8962]] },
+  ST: { c: [40.8874, -73.8978], r: [0.0005, 0.0007] },
+  NW: { c: [40.9040, -73.8990], r: [0.0022, 0.0010] },
+  JK: { c: [40.8978, -73.8912], r: [0.0008, 0.0010] },
+  HM: { c: [40.8906, -73.8962], r: [0.0004, 0.0005] },
+  VH: { c: [40.8932, -73.8978], r: [0.0005, 0.0006] },
+  IF: { c: [40.8990, -73.8760], r: [0.0007, 0.0010] },
+  GC: { c: [40.8943, -73.8872], r: [0.0003, 0.0004] },
+};
+{
+  const gr = rng(99);
+  const along = (pts, t) => {
+    const seg = Math.min(Math.floor(t * (pts.length - 1)), pts.length - 2), f = t * (pts.length - 1) - seg;
+    const [a, b] = [pts[seg], pts[seg + 1]];
+    return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
+  };
+  for (const [code, , n] of ZONES) {
+    const g = GEO[code], list = BENCHES.filter(b => b.zone === code);
+    list.forEach((b, i) => {
+      if (g.line) {
+        const [la, ln] = along(g.line, (i + 0.5) / n);
+        b.lat = la + (gr() - 0.5) * 0.0003; b.lng = ln + (gr() - 0.5) * 0.0004;
+      } else {
+        const ang = gr() * Math.PI * 2, rad = Math.sqrt(gr());
+        b.lat = g.c[0] + Math.sin(ang) * rad * g.r[0]; b.lng = g.c[1] + Math.cos(ang) * rad * g.r[1];
+      }
+    });
+  }
+}
 
 /* ---------- storage: adoptions, accounts, current session ---------- */
 const KEY = "vcp-bench-adoptions-v1", USERS_KEY = "vcp-bench-users-v1", SESSION_KEY = "vcp-bench-session-v1";
@@ -339,7 +423,7 @@ const publicName = a => a.anonymous ? "Anonymous donor" : a.donor;
 let state = { view: "map", filter: "all", q: "", sel: null };
 let confirming = null;      // adoption id awaiting "yes, cancel"
 let authMode = "signup";
-try { const v = localStorage.getItem(KEY + ":view"); if (v === "list" || v === "map") state.view = v; } catch (e) {}
+try { const v = localStorage.getItem(KEY + ":view"); if (v === "list" || v === "map" || v === "geo") state.view = v; } catch (e) {}
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -375,7 +459,11 @@ function render() {
   renderStats(all);
   $("v-map").setAttribute("aria-pressed", state.view === "map");
   $("v-list").setAttribute("aria-pressed", state.view === "list");
-  state.view === "map" ? renderMap(all) : renderList(all);
+  $("v-geo").setAttribute("aria-pressed", state.view === "geo");
+  const geo = state.view === "geo";
+  $("view").hidden = geo; $("geo-wrap").hidden = !geo;
+  if (geo) { $("view").innerHTML = ""; renderGeo(all); }
+  else state.view === "map" ? renderMap(all) : renderList(all);
   renderPanel();
   if ($("mine-dlg").open) renderMine();
 }
@@ -391,6 +479,47 @@ function renderMap(all) {
     return `<div><div class="zone-head"><h2>${name}</h2><span class="count">${taken} of ${items.length} adopted</span></div><div class="dots">${dots}</div></div>`;
   }).join("");
   $("view").innerHTML = `<div class="zones">${html}</div>`;
+}
+
+// Leaflet map, built once on first use and restyled on every render
+let map = null, markers = {};
+const PARK = [[40.8862, -73.8995], [40.8905, -73.9012], [40.9008, -73.9028], [40.9133, -73.9010], [40.9138, -73.8792], [40.9040, -73.8722], [40.8965, -73.8706], [40.8905, -73.8760], [40.8860, -73.8830], [40.8852, -73.8925]];
+function ensureMap() {
+  if (map || !window.L) return;
+  map = L.map("geo", { preferCanvas: true, scrollWheelZoom: false, zoomSnap: 0.5 });
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' }).addTo(map);
+  const green = getComputedStyle(document.documentElement).getPropertyValue("--green").trim();
+  L.polygon(PARK, { color: green, weight: 1.5, fillColor: green, fillOpacity: 0.06, interactive: false }).addTo(map);
+  for (const [code, name] of ZONES) {
+    const g = GEO[code], at = g.c || g.line[Math.floor(g.line.length / 2)];
+    L.tooltip({ permanent: true, direction: "center", className: "zone-label", interactive: false }).setLatLng(at).setContent(name).addTo(map);
+  }
+  for (const b of BENCHES) {
+    const m = L.circleMarker([b.lat, b.lng], { radius: 5 }).addTo(map);
+    m.bindTooltip("", { direction: "top", offset: [0, -6] });
+    m.on("click", () => select(b.id));
+    markers[b.id] = m;
+  }
+  map.fitBounds(L.latLngBounds(BENCHES.map(b => [b.lat, b.lng])).pad(0.06));
+}
+function renderGeo(all) {
+  ensureMap();
+  if (!map) { $("geo").innerHTML = `<p class="geo-msg">The map couldn't load. Use the By area or List view instead.</p>`; return; }
+  map.invalidateSize();
+  const cs = getComputedStyle(document.documentElement), tok = k => cs.getPropertyValue(k).trim();
+  const C = { available: tok("--muted"), adopted: tok("--green"), expiring: tok("--amber"), reserved: tok("--green") };
+  $("geo-legend").innerHTML = Object.keys(SHORT).map(k => `<span><i style="background:${k === "available" ? tok("--surface") : C[k]};border:1.5px solid ${C[k]};${k === "reserved" ? "opacity:.6" : ""}"></i>${SHORT[k]}</span>`).join("");
+  for (const { b, s } of all) {
+    const m = markers[b.id], on = matches(b, s), sel = state.sel === b.id;
+    m.setRadius(sel ? 9 : 5);
+    m.setStyle({
+      color: sel ? tok("--ink") : C[s.status], weight: sel ? 3 : 1.5, opacity: on ? 1 : 0.25,
+      fillColor: s.status === "available" ? tok("--surface") : C[s.status],
+      fillOpacity: on ? (s.status === "reserved" ? 0.4 : 0.95) : 0.1,
+    });
+    m.setTooltipContent(esc(`${b.id} · ${SHORT[s.status]}${s.current ? " — " + publicName(s.current) : ""}`));
+    if (sel) m.bringToFront();
+  }
 }
 
 function renderList(all) {
@@ -568,6 +697,7 @@ $("q").addEventListener("input", e => { state.q = e.target.value; render(); });
 const setView = v => { state.view = v; try { localStorage.setItem(KEY + ":view", v); } catch (e) {} render(); };
 $("v-map").addEventListener("click", () => setView("map"));
 $("v-list").addEventListener("click", () => setView("list"));
+$("v-geo").addEventListener("click", () => setView("geo"));
 $("reset").addEventListener("click", () => {
   // keep accounts and their own bookings; restore the sample donors around them
   const kept = adoptions.filter(a => a.userId);
