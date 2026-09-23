@@ -24,11 +24,23 @@ A single-page app that serves as the one source of truth for Van Cortlandt Park'
 - **Bench names** are plain and readable, like "Parade Ground Bench 12" (the area plus a number). Behind the scenes each bench also keeps a stable internal ID, so renaming a bench never breaks its adoption history. The inventory and donors are sample data.
 - **No payment**, as the brief specifies.
 
-## Limitations: this is a front-end demo
-- **Data is stored per browser.** Accounts and adoptions are saved in `localStorage`, so they aren't shared between visitors or devices.
-- **Passwords are salted and hashed (SHA-256)** before they're stored, but authentication runs in the browser, so it isn't real security.
-- **For production**, the same data model would move behind a small API with:
-  - server-side sessions, and password hashing with bcrypt or argon2;
-  - a database, for example Postgres with an exclusion constraint on (bench, date range), so the database itself enforces the no-overlap rule;
-  - cancellation checked on the server against the signed-in user.
-- **Next steps:** staff tools (edit or cancel any adoption, CSV export), renewal reminder emails, and real GPS coordinates for each bench in place of the approximate positions.
+## Architecture: one shared registry
+- **Front end:** a single static page (`index.html`, hosted on GitHub Pages) with no build step. It uses Leaflet and OpenStreetMap for the map.
+- **Back end:** [Supabase](https://supabase.com), which provides Postgres, authentication and realtime updates. Every visitor sees the same adoptions, and a new adoption shows up on everyone's open page within a second or two.
+- **Accounts:** handled by Supabase Auth. Passwords are hashed server-side and never touch the page's storage, and sessions persist across visits.
+- **The database enforces the rules, not just the page** (see [`supabase-setup.sql`](supabase-setup.sql)):
+  - an exclusion constraint on `(bench_id, daterange(start, end))` makes double-booking impossible, even if two people reserve at the same instant;
+  - row-level security lets anyone read the registry, but only signed-in people can reserve, only in their own name, and not in the past;
+  - there are no update or delete permissions; the only change allowed is `cancel_adoption()`, which checks that the adoption belongs to the caller;
+  - emails live only in Supabase Auth, never in the public `adoptions` table.
+- **Why this key is public:** the Supabase URL and *publishable* key in `index.html` are meant to be in client code. Access is controlled by the row-level-security policies, not by keeping the key secret.
+- **Offline fallback:** if Supabase can't be reached (or the config is empty), the page falls back to a browser-only demo using `localStorage`.
+
+### Setting it up yourself
+1. Create a Supabase project, and under **Authentication → Sign In / Providers → Email**, turn off "Confirm email" (optional, but it keeps sign-up instant for a demo).
+2. Open **SQL Editor**, paste in `supabase-setup.sql`, and click **Run**. This creates the table, the rules and the sample data.
+3. Put your project URL and publishable key into `SUPABASE_URL` and `SUPABASE_KEY` near the top of the script in `index.html`.
+
+## Next steps
+- Staff tools: edit or cancel any adoption, CSV export, and renewal reminder emails for terms ending within 90 days.
+- Real GPS coordinates for each bench, in place of the approximate positions.

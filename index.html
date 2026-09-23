@@ -254,7 +254,7 @@ dialog form{border-top:0;padding-top:0}
   </div>
 
   <footer>
-    <span>Demo: sample benches and donors. Accounts and adoptions are saved in this browser only.</span>
+    <span id="mode-note">Demo: sample benches and donors. Accounts and adoptions are saved in this browser only.</span>
     <button class="linkbtn" id="reset">Reset sample data</button>
   </footer>
 </div>
@@ -271,6 +271,7 @@ dialog form{border-top:0;padding-top:0}
 <div class="toast" id="toast" role="status" hidden></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script>
 (() => {
 /* ---------- dates (all ISO yyyy-mm-dd, computed in UTC) ---------- */
@@ -360,10 +361,30 @@ const GEO = {
 const KEY = "vcp-bench-adoptions-v1", USERS_KEY = "vcp-bench-users-v1", SESSION_KEY = "vcp-bench-session-v1";
 const read = (k, fallback) => { try { const raw = localStorage.getItem(k); return raw ? JSON.parse(raw) : fallback; } catch (e) { return fallback; } };
 const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
-let adoptions = read(KEY, null) || seed();
-let users = read(USERS_KEY, []);
-let me = users.find(u => u.id === read(SESSION_KEY, null)) || null;
-const save = () => write(KEY, adoptions);
+/* Shared mode: adoptions and accounts live in Supabase (Postgres + Auth), so every
+   visitor sees the same registry. The URL and publishable key below are meant to be
+   public; access is controlled by row-level security (see supabase-setup.sql).
+   Left empty (or if the library can't load), the page runs as a browser-only demo. */
+const SUPABASE_URL = "https://xohydapxqyxsheqmovuf.supabase.co";
+const SUPABASE_KEY = "sb_publishable_OSYN_xSIHvBYaLKIO5Mkvw_PTPuIAeK";
+const sb = SUPABASE_URL && SUPABASE_KEY && window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
+const SHARED = !!sb;
+
+let adoptions = SHARED ? [] : (read(KEY, null) || seed());
+let users = SHARED ? [] : read(USERS_KEY, []);
+let me = SHARED ? null : (users.find(u => u.id === read(SESSION_KEY, null)) || null);
+let loaded = !SHARED;
+const save = () => { if (!SHARED) write(KEY, adoptions); };
+
+const fromRow = r => ({ id: r.id, benchId: r.bench_id, userId: r.user_id, donor: r.donor, anonymous: r.anonymous, plaque: r.plaque || "", start: r.start_date, end: r.end_date, cancelledAt: r.cancelled_at, voided: r.voided });
+const userFrom = u => u ? { id: u.id, email: u.email, name: (u.user_metadata && u.user_metadata.name) || u.email.split("@")[0] } : null;
+async function loadShared() {
+  const { data, error } = await sb.from("adoptions").select("*").eq("voided", false).range(0, 9999);
+  if (error) { toast("Couldn't load the latest adoptions. Check your connection and refresh the page."); return; }
+  adoptions = data.map(fromRow); loaded = true; render();
+}
+let reloadTimer;
+const reloadSoon = () => { clearTimeout(reloadTimer); reloadTimer = setTimeout(loadShared, 250); };
 
 function seed() {
   const first = ["Maria", "James", "Aisha", "Daniel", "Rosa", "Kevin", "Priya", "Tom", "Yolanda", "Samuel", "Grace", "Luis", "Hannah", "Omar", "Beatriz", "Victor"];
@@ -400,7 +421,24 @@ async function hash(pw, salt) {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(salt + ":" + pw));
   return [...new Uint8Array(buf)].map(x => x.toString(16).padStart(2, "0")).join("");
 }
+// friendly wording for the auth errors people actually hit
+function authMessage(error) {
+  const m = (error && error.message || "").toLowerCase();
+  if (m.includes("already registered") || m.includes("already exists")) return { exists: true };
+  if (m.includes("invalid login")) return "That email and password don't match an account.";
+  if (m.includes("password")) return "Choose a stronger password: at least 8 characters.";
+  if (m.includes("rate limit")) return "Too many attempts. Wait a minute and try again.";
+  return (error && error.message) || "Something went wrong. Try again.";
+}
 async function signUp(name, email, pw) {
+  if (SHARED) {
+    const { data, error } = await sb.auth.signUp({ email, password: pw, options: { data: { name } } });
+    if (error) throw authMessage(error);
+    // Supabase hides duplicate sign-ups behind a user with no identities
+    if (data.user && data.user.identities && data.user.identities.length === 0) throw { exists: true };
+    if (!data.session) return "confirm";
+    me = userFrom(data.user); render(); return;
+  }
   email = email.toLowerCase();
   if (users.some(u => u.email === email)) throw "An account with that email already exists. Sign in instead.";
   const salt = [...crypto.getRandomValues(new Uint32Array(4))].join("-");
@@ -408,11 +446,19 @@ async function signUp(name, email, pw) {
   users.push(u); write(USERS_KEY, users); setMe(u);
 }
 async function signIn(email, pw) {
+  if (SHARED) {
+    const { data, error } = await sb.auth.signInWithPassword({ email, password: pw });
+    if (error) throw authMessage(error);
+    me = userFrom(data.user); render(); return;
+  }
   const u = users.find(x => x.email === email.toLowerCase());
   if (!u || u.hash !== await hash(pw, u.salt)) throw "That email and password don't match an account.";
   setMe(u);
 }
-function setMe(u) { me = u; write(SESSION_KEY, u ? u.id : null); render(); }
+function setMe(u) {
+  if (SHARED) { if (!u) sb.auth.signOut(); me = u; render(); return; }
+  me = u; write(SESSION_KEY, u ? u.id : null); render();
+}
 
 /* ---------- derived status ---------- */
 const live = () => adoptions.filter(a => !a.voided);
@@ -440,9 +486,18 @@ function latestEnd(id, start) {
 }
 function overlaps(id, start, end) { return termsFor(id).find(a => a.start <= end && start <= a.end); }
 
-function cancelAdoption(aid) {
+async function cancelAdoption(aid) {
   const a = adoptions.find(x => x.id === aid);
   if (!a || !me || a.userId !== me.id || a.end < TODAY) return;
+  if (SHARED) {
+    // the database checks ownership and applies the same rule as below
+    const { error } = await sb.rpc("cancel_adoption", { aid });
+    confirming = null;
+    if (error) { toast(`Couldn't cancel: ${error.message}`); return; }
+    await loadShared();
+    toast(`Cancelled your adoption of ${BY_ID[a.benchId].name}. The bench is open again.`);
+    return;
+  }
   // not started yet: drop it entirely; already running: end it yesterday so the bench is open today
   if (a.start >= TODAY) a.voided = true; else a.end = addDays(TODAY, -1);
   a.cancelledAt = TODAY;
@@ -485,6 +540,7 @@ function renderAccount() {
 function renderStats(all) {
   const c = { available: 0, adopted: 0, expiring: 0, reserved: 0 };
   all.forEach(x => c[x.s.status]++);
+  if (!loaded) { $("stats").innerHTML = `<div class="stat"><span>Loading the registry…</span></div>`; $("chips").innerHTML = ""; return; }
   $("stats").innerHTML = [
     [BENCHES.length, "benches"], [c.adopted + c.expiring, "adopted now"], [c.available + c.reserved, "open to adopt"], [c.expiring, `ending in ${EXPIRING_DAYS} days`],
   ].map(([n, l]) => `<div class="stat"><b>${n}</b><span>${l}</span></div>`).join("");
@@ -695,7 +751,7 @@ function renderPanel() {
   $("adopt").addEventListener("submit", e => { e.preventDefault(); submit(b.id); });
 }
 
-function submit(id) {
+async function submit(id) {
   const err = msg => { $("f-err").textContent = msg; $("f-err").hidden = false; };
   if (!me) return err("Sign in to reserve a bench.");
   const name = $("f-name").value.trim() || me.name, start = $("f-start").value, end = $("f-end").value;
@@ -709,8 +765,19 @@ function submit(id) {
   if (clash) return err(clash.start <= TODAY && start <= TODAY
     ? `This bench is taken until ${fmt(clash.end)}, so it can't be reserved right away. Start on ${fmt(earliestStart(id))} or later.`
     : `Those dates overlap an existing booking (${fmt(clash.start)} – ${fmt(clash.end)}). Choose dates outside it.`);
-  adoptions.push({ id: "m" + Date.now(), benchId: id, userId: me.id, donor: name, email: me.email, anonymous: $("f-anon").checked, plaque, start, end, createdAt: TODAY });
-  save(); render();
+  if (SHARED) {
+    const go = $("f-go"); go.disabled = true; go.textContent = "Saving…";
+    const { error } = await sb.from("adoptions").insert({ bench_id: id, user_id: me.id, donor: name, anonymous: $("f-anon").checked, plaque, start_date: start, end_date: end });
+    if (error) {
+      go.disabled = false;
+      if (error.code === "23P01") { await loadShared(); return toast("Someone else just booked dates that overlap yours. The bench has been refreshed; pick new dates."); }
+      return err(`Couldn't save your reservation: ${error.message}`);
+    }
+    await loadShared();
+  } else {
+    adoptions.push({ id: "m" + Date.now(), benchId: id, userId: me.id, donor: name, email: me.email, anonymous: $("f-anon").checked, plaque, start, end, createdAt: TODAY });
+    save(); render();
+  }
   const ahead = termsFor(id).filter(a => a.end >= TODAY && a.start < start && a.userId !== me.id).length;
   toast(ahead > 0
     ? `You're #${ahead + 1} in line! ${BY_ID[id].name} is yours from ${fmt(start)} through ${fmt(end)}. Find it under My adoptions.`
@@ -761,6 +828,16 @@ function showCreated() {
     </div>`;
   $("auth-form").querySelector("[data-close]").focus();
 }
+// only if the Supabase project still requires email confirmation
+function showConfirmEmail(email) {
+  $("auth-form").innerHTML = `
+    <div class="done">
+      <div class="tick">${ICON_TICK}</div>
+      <h3 id="auth-title">Account created</h3>
+      <p>One last step: we sent a confirmation link to <b>${esc(email)}</b>. Click it, then come back and sign in.</p>
+      <div class="actions"><button type="button" class="btn" data-act="signin">I've confirmed, sign me in</button></div>
+    </div>`;
+}
 $("auth-form").addEventListener("submit", async e => {
   e.preventDefault();
   const err = m => { $("a-err").innerHTML = m; $("a-err").hidden = false; };
@@ -770,10 +847,15 @@ $("auth-form").addEventListener("submit", async e => {
       const name = $("a-name").value.trim();
       if (!name) return err("Enter your full name.");
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return err("Enter a valid email address, like name@example.com.");
-      if (users.some(u => u.email === email.toLowerCase())) return err(`There's already an account for ${esc(email)}. <button type="button" class="linkbtn" data-act="signin">Sign in instead</button>`);
+      const exists = () => err(`There's already an account for ${esc(email)}. <button type="button" class="linkbtn" data-act="signin">Sign in instead</button>`);
+      if (users.some(u => u.email === email.toLowerCase())) return exists();
       if (pw.length < 8) return err("Use a password of at least 8 characters.");
       if (pw !== $("a-pw2").value) return err("The two passwords don't match. Type them again.");
-      await signUp(name, email, pw);
+      const btn = $("auth-form").querySelector(".btn"); btn.disabled = true; btn.textContent = "Creating your account…";
+      let result;
+      try { result = await signUp(name, email, pw); }
+      catch (m) { btn.disabled = false; btn.textContent = "Create my account"; if (m && m.exists) return exists(); throw m; }
+      if (result === "confirm") return showConfirmEmail(email);
       showCreated();
     } else {
       if (!email || !pw) return err("Enter your email and password.");
@@ -781,7 +863,7 @@ $("auth-form").addEventListener("submit", async e => {
       $("auth-dlg").close();
       toast(`Welcome back, ${me.name}. You're signed in.`);
     }
-  } catch (m) { err(typeof m === "string" ? esc(m) : "Something went wrong. Try again."); }
+  } catch (m) { err(typeof m === "string" ? esc(m) : m && m.exists ? "There's already an account for that email." : "Something went wrong. Try again."); }
 });
 $("auth-form").addEventListener("click", e => {
   if (e.target.closest("[data-close]")) { $("auth-dlg").close(); return; }
@@ -833,6 +915,16 @@ $("reset").addEventListener("click", () => {
   adoptions = [...seed(), ...kept]; save(); state.sel = null; render(); toast("Sample data restored.");
 });
 
+if (SHARED) {
+  // one registry for everyone: load it, keep it live, and restore the signed-in user
+  $("reset").hidden = true;
+  $("mode-note").textContent = "Sample benches and donors. Adoptions are shared live with everyone who visits.";
+  sb.auth.getSession().then(({ data }) => { me = userFrom(data.session && data.session.user); render(); });
+  sb.auth.onAuthStateChange((_event, session) => { me = userFrom(session && session.user); render(); });
+  sb.channel("adoptions").on("postgres_changes", { event: "*", schema: "public", table: "adoptions" }, reloadSoon).subscribe();
+  window.addEventListener("focus", reloadSoon);
+  loadShared();
+}
 render();
 })();
 </script>
