@@ -51,6 +51,12 @@ header .lede{margin-top:8px;max-width:62ch;color:var(--ink);font-size:15.5px;lin
 .notice.info{background:var(--green-soft)}
 .notice.info svg{color:var(--green)}
 .btn.later{background:var(--amber);color:#1F1606}
+.queue{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;font-size:13.5px}
+.queue li{display:flex;gap:10px;align-items:flex-start}
+.queue li div{display:flex;flex-direction:column}
+.queue li div span{color:var(--muted)}
+.queue .pos{flex:none;display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--ground);box-shadow:inset 0 0 0 1px var(--line);font:700 12px/1 var(--display);color:var(--muted)}
+.queue li.now .pos{background:var(--green);box-shadow:none;color:var(--surface)}
 .dlg-intro{margin:0;color:var(--muted);font-size:14px}
 .done{display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;padding-block:6px}
 .done .tick{width:56px;height:56px;border-radius:50%;background:var(--green-soft);color:var(--green);display:grid;place-items:center}
@@ -380,7 +386,11 @@ function seed() {
     const honoree = `${pick(first)} ${pick(last)}`;
     out.push({ id: "a" + out.length, benchId: b.id, donor, email: "", anonymous: sr() < 0.1, plaque: pick(lines)(donor.includes(" ") && sr() < .5 ? honoree : donor).toUpperCase(), start, end: endOf(start, months), createdAt: start, sample: true });
     if (sr() < 0.3) { const ps = addMonths(start, -24); out.push({ id: "a" + out.length, benchId: b.id, donor: `${pick(first)} ${pick(last)}`, email: "", anonymous: false, plaque: "", start: ps, end: endOf(ps, 24), createdAt: ps, sample: true }); }
-    if (sr() < 0.05) { const ns = addDays(endOf(start, months), 1); out.push({ id: "a" + out.length, benchId: b.id, donor: pick(orgs), email: "", anonymous: false, plaque: "DONATED BY\n" + pick(orgs).toUpperCase(), start: ns, end: endOf(ns, 12), createdAt: TODAY, sample: true }); }
+    if (sr() < 0.05) { const ns = addDays(endOf(start, months), 1); out.push({ id: "a" + out.length, benchId: b.id, donor: pick(orgs), email: "", anonymous: false, plaque: "DONATED BY\n" + pick(orgs).toUpperCase(), start: ns, end: endOf(ns, 12), createdAt: TODAY, sample: true });
+      // some popular benches have a longer line: two or three more bookings after that
+      let prev = endOf(ns, 12);
+      for (let k = 0, extra = sr() < 0.6 ? 1 + Math.floor(sr() * 2) : 0; k < extra; k++) { const s2 = addDays(prev, 1); prev = endOf(s2, pick([6, 12, 24])); out.push({ id: "a" + out.length, benchId: b.id, donor: `${pick(first)} ${pick(last)}`, email: "", anonymous: false, plaque: "", start: s2, end: prev, createdAt: TODAY, sample: true }); }
+     }
   }
   return out;
 }
@@ -614,7 +624,11 @@ function renderPanel() {
   }
   const mine = me ? termsFor(b.id).filter(a => a.userId === me.id && a.end >= TODAY) : [];
   if (mine.length) html += mine.map(a => `<div class="yours"><div><b>Your ${a.start > TODAY ? "reservation" : "adoption"}</b><br><span style="color:var(--muted)">${fmt(a.start)} – ${fmt(a.end)} · ${durLabel(a.start, a.end)}</span></div>${cancelControl(a)}</div>`).join("");
-  if (s.upcoming.length) html += `<div><div class="label" style="margin-bottom:6px">Reserved</div><ul class="history">${s.upcoming.map(a => `<li><b>${esc(publicName(a))}</b><span>${fmt(a.start)} – ${fmt(a.end)}</span></li>`).join("")}</ul></div>`;
+  // everyone holding or waiting for this bench, in the order they get it
+  const queue = termsFor(b.id).filter(a => a.end >= TODAY);
+  const whoIs = a => (me && a.userId === me.id) ? `${esc(publicName(a))} (you)` : esc(publicName(a));
+  if (s.upcoming.length) html += `<div><div class="label" style="margin-bottom:8px">Line for this bench · ${queue.length} ${queue.length === 1 ? "booking" : "bookings"}</div>
+    <ol class="queue">${queue.map((a, i) => `<li${a.start <= TODAY ? ' class="now"' : ""}><span class="pos">${i + 1}</span><div><b>${whoIs(a)}</b><span>${a.start <= TODAY ? `Has it now, through ${fmt(a.end)}` : `${i === 0 || (i === 1 && queue[0].start <= TODAY) ? "Next" : "Then"}: ${fmt(a.start)} – ${fmt(a.end)}`}</span></div></li>`).join("")}</ol></div>`;
   if (s.past.length) html += `<div><div class="label" style="margin-bottom:6px">Past adoptions</div><ul class="history">${s.past.map(a => `<li><b>${esc(publicName(a))}${a.cancelledAt ? " (cancelled)" : ""}</b><span>${fmt(a.start)} – ${fmt(a.end)}</span></li>`).join("")}</ul></div>`;
 
   // busy = someone holds the bench today, so the earliest a new term can begin is later
@@ -622,13 +636,20 @@ function renderPanel() {
   const holder = termsFor(b.id).find(a => a.start <= TODAY && TODAY <= a.end) || null;
   const nextBooking = !busy ? termsFor(b.id).find(a => a.start > TODAY) : null;
   const holderName = h => (me && h.userId === me.id) ? "You have" : `${esc(publicName(h))} has`;
+  // bookings by other people that start before a given day: they're ahead of you in line
+  const othersAhead = day => queue.filter(a => a.start < day && !(me && a.userId === me.id)).length;
+  const aheadAtOpening = othersAhead(earliest);
+  const takenByOthers = busy && aheadAtOpening > 0;
+  const lineNote = aheadAtOpening > 1
+    ? ` ${aheadAtOpening - 1} more ${aheadAtOpening - 1 === 1 ? "reservation is" : "reservations are"} lined up after that, so the next opening would make you <b style="display:inline">#${aheadAtOpening + 1} in line</b>.`
+    : aheadAtOpening === 1 ? ` You'd be <b style="display:inline">next in line</b>.` : "";
   const notice = busy
-    ? `<div class="notice">${ICON_CLOCK}<div><b>Not available right now</b>${holder ? holderName(holder) : "Someone has"} this bench through ${fmt(addDays(earliest, -1))}. You can't reserve it right away, but you can claim the next opening, starting <b style="display:inline">${fmt(earliest)}</b>.</div></div>`
+    ? `<div class="notice">${ICON_CLOCK}<div><b>Not available right now</b>${holder ? holderName(holder) : "Someone has"} this bench through ${fmt(holder ? holder.end : addDays(earliest, -1))}.${lineNote} You can't reserve it right away; the earliest open day is <b style="display:inline">${fmt(earliest)}</b>.</div></div>`
     : nextBooking
       ? `<div class="notice info">${ICON_INFO}<div><b>Open now, booked later</b>This bench is free today, but it's reserved from ${fmt(nextBooking.start)}. Your dates need to end by ${fmt(addDays(nextBooking.start, -1))}.</div></div>`
       : "";
   if (!me) {
-    html += `<div class="gate"><h3 style="font-size:17px">${busy ? "Reserve for later" : "Reserve this bench"}</h3>${notice}<p>Create a free account to ${busy ? "get the next opening on this bench" : "reserve this bench"}, and to cancel it later if your plans change.</p>
+    html += `<div class="gate"><h3 style="font-size:17px">${takenByOthers ? "Reserve for later" : "Reserve this bench"}</h3>${notice}<p>Create a free account to ${takenByOthers ? "get in line for this bench" : "reserve this bench"}, and to cancel it later if your plans change.</p>
       <div class="actions"><button class="btn-ghost primary" data-act="signup">Create account</button><button class="btn-ghost" data-act="signin">Sign in</button></div></div>`;
     p.innerHTML = html;
     return;
@@ -636,7 +657,7 @@ function renderPanel() {
   const max0 = latestEnd(b.id, earliest);
   let end0 = endOf(earliest, 12); if (max0 && end0 > max0) end0 = max0;
   html += `<form id="adopt" novalidate>
-    <h3>${busy ? "Reserve for later" : "Reserve this bench"}</h3>
+    <h3>${takenByOthers ? "Reserve for later" : "Reserve this bench"}</h3>
     ${notice}
     <div class="row">
       <div class="field"><label for="f-start">First day</label><input id="f-start" type="date" min="${TODAY}" value="${earliest}" required></div>
@@ -661,10 +682,12 @@ function renderPanel() {
     if (st && fe.value && fe.value < st) fe.value = st;
     if (max && fe.value > max) fe.value = max;
     $("f-sum").textContent = st && fe.value ? `${durLabel(st, fe.value)}: ${fmt(st)} through ${fmt(fe.value)}${max ? ` (next booking starts ${fmt(addDays(max, 1))})` : ""}` : "Pick a first and last day.";
-    // the button says plainly whether this starts today or is a booking for later
-    const later = st && st > TODAY, go = $("f-go");
-    go.classList.toggle("later", !!later);
-    go.textContent = later ? `Reserve for later · starts ${fmt(st)}` : `Reserve now · starts today`;
+    // amber "for later" only when other people are ahead of you; picking a future
+    // start on a free bench is still an ordinary (green) reservation
+    const ahead = st ? othersAhead(st) : 0, go = $("f-go");
+    go.classList.toggle("later", ahead > 0);
+    go.textContent = ahead > 0 ? `Reserve for later · #${ahead + 1} in line, starts ${fmt(st)}`
+      : !st || st <= TODAY ? "Reserve now · starts today" : `Reserve · starts ${fmt(st)}`;
   };
   fs.addEventListener("input", upd); fe.addEventListener("input", upd);
   p.querySelectorAll("[data-preset]").forEach(btn => btn.addEventListener("click", () => { if (fs.value) { fe.value = PRESETS[+btn.dataset.preset](fs.value); upd(); } }));
@@ -688,9 +711,12 @@ function submit(id) {
     : `Those dates overlap an existing booking (${fmt(clash.start)} – ${fmt(clash.end)}). Choose dates outside it.`);
   adoptions.push({ id: "m" + Date.now(), benchId: id, userId: me.id, donor: name, email: me.email, anonymous: $("f-anon").checked, plaque, start, end, createdAt: TODAY });
   save(); render();
-  toast(start > TODAY
-    ? `You're in line! ${BY_ID[id].name} is yours from ${fmt(start)} through ${fmt(end)}. Find it under My adoptions.`
-    : `Reserved ${BY_ID[id].name} starting today, through ${fmt(end)}. Thank you!`);
+  const ahead = termsFor(id).filter(a => a.end >= TODAY && a.start < start && a.userId !== me.id).length;
+  toast(ahead > 0
+    ? `You're #${ahead + 1} in line! ${BY_ID[id].name} is yours from ${fmt(start)} through ${fmt(end)}. Find it under My adoptions.`
+    : start > TODAY
+      ? `Reserved ${BY_ID[id].name} from ${fmt(start)} through ${fmt(end)}. Thank you!`
+      : `Reserved ${BY_ID[id].name} starting today, through ${fmt(end)}. Thank you!`);
 }
 
 /* ---------- dialogs ---------- */
