@@ -20,7 +20,7 @@ A single-page app that serves as the one source of truth for Van Cortlandt Park'
 - **Only your own adoptions can be cancelled.** Each record stores the id of the account that made it, and the cancel control only appears for your own records. The sample donors have no account.
 - **Privacy:** the account email is never shown publicly. Donors can choose to be listed as anonymous, and the name shown on the registry can differ from the account name.
 - **Plaque limit:** 3 lines of 32 characters each, engraved in capitals (an assumption).
-- **Bench IDs** follow the pattern `VC-<AREA>-<NNN>`. The inventory and donors are sample data.
+- **Bench names** are plain and readable, like "Parade Ground Bench 12" (the area plus a number). Behind the scenes each bench also keeps a stable internal ID, so renaming a bench never breaks its adoption history. The inventory and donors are sample data.
 - **No payment**, as the brief specifies.
 
 ## Limitations: this is a front-end demo

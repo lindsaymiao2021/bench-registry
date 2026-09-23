@@ -106,7 +106,7 @@ tbody tr:hover,tbody tr.sel{background:var(--green-soft)}
 aside{position:sticky;top:calc(env(safe-area-inset-top,0px) + 16px);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:20px;display:flex;flex-direction:column;gap:16px;max-height:calc(100vh - 32px);overflow:auto}
 @media (max-width:900px){aside{position:static;max-height:none}}
 .empty{color:var(--muted)}
-.bench-id{font-family:var(--mono);font-size:24px;font-weight:500}
+.bench-id{font-family:var(--display);font-size:24px;font-weight:800;line-height:1.15}
 .pill{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;padding:2px 9px 2px 7px;border-radius:999px}
 .p-available{background:var(--ground);color:var(--muted);box-shadow:inset 0 0 0 1px var(--line)}
 .p-adopted,.p-reserved{background:var(--green-soft);color:var(--green)}
@@ -230,7 +230,7 @@ dialog form{border-top:0;padding-top:0}
       <button id="v-geo" aria-pressed="false">Map</button>
     </div>
     <div class="chips" id="chips" role="group" aria-label="Filter by status"></div>
-    <input class="search" id="q" type="search" placeholder="Search bench ID or donor…" aria-label="Search bench ID or donor">
+    <input class="search" id="q" type="search" placeholder="Search a bench, area or donor…" aria-label="Search a bench, area or donor">
   </div>
 
   <div class="main">
@@ -308,7 +308,8 @@ const r = rng(7);
 const BENCHES = [];
 for (const [code, name, n] of ZONES)
   for (let i = 1; i <= n; i++)
-    BENCHES.push({ id: `VC-${code}-${String(i).padStart(3, "0")}`, zone: code, zoneName: name, type: TYPES[Math.floor(r() ** 1.8 * TYPES.length)] });
+    // id is the stable internal key; name is what people see, e.g. "Parade Ground Bench 12"
+    BENCHES.push({ id: `VC-${code}-${String(i).padStart(3, "0")}`, name: `${name} Bench ${i}`, zone: code, zoneName: name, type: TYPES[Math.floor(r() ** 1.8 * TYPES.length)] });
 const BY_ID = Object.fromEntries(BENCHES.map(b => [b.id, b]));
 
 /* ---------- approximate bench positions (demo; real GPS points would replace these) ---------- */
@@ -437,7 +438,7 @@ function cancelAdoption(aid) {
   a.cancelledAt = TODAY;
   confirming = null;
   save(); render();
-  toast(`Cancelled your adoption of ${a.benchId}. The bench is open again.`);
+  toast(`Cancelled your adoption of ${BY_ID[a.benchId].name}. The bench is open again.`);
 }
 
 const STATUS = { available: "Available", adopted: "Adopted", expiring: `Ends within ${EXPIRING_DAYS} days`, reserved: "Reserved (starts later)" };
@@ -459,7 +460,7 @@ function matches(b, s) {
   if (state.filter !== "all" && s.status !== state.filter) return false;
   const q = state.q.trim().toLowerCase();
   if (!q) return true;
-  if (b.id.toLowerCase().includes(q) || b.zoneName.toLowerCase().includes(q)) return true;
+  if (b.name.toLowerCase().includes(q) || b.id.toLowerCase().includes(q)) return true;
   return termsFor(b.id).some(a => !a.anonymous && a.donor.toLowerCase().includes(q));
 }
 
@@ -501,8 +502,8 @@ function renderMap(all) {
     const items = all.filter(x => x.b.zone === code);
     const taken = items.filter(x => x.s.status === "adopted" || x.s.status === "expiring").length;
     const dots = items.map(({ b, s }) => {
-      const cur = s.current ? ` — ${publicName(s.current)} through ${fmt(s.current.end)}` : "";
-      return `<button class="dot s-${s.status}${matches(b, s) ? "" : " dim"}${state.sel === b.id ? " sel" : ""}" data-id="${b.id}" title="${esc(b.id + " · " + SHORT[s.status] + cur)}" aria-label="${esc(b.id + ", " + SHORT[s.status] + cur)}"></button>`;
+      const cur = s.current ? ` · ${publicName(s.current)} through ${fmt(s.current.end)}` : "";
+      return `<button class="dot s-${s.status}${matches(b, s) ? "" : " dim"}${state.sel === b.id ? " sel" : ""}" data-id="${b.id}" title="${esc(b.name + " · " + SHORT[s.status] + cur)}" aria-label="${esc(b.name + ", " + SHORT[s.status] + cur)}"></button>`;
     }).join("");
     return `<div><div class="zone-head"><h2>${name}</h2><span class="count">${taken} of ${items.length} adopted</span></div><div class="dots">${dots}</div></div>`;
   }).join("");
@@ -548,7 +549,7 @@ function ensureMap() {
       geoEl.style.cursor = b ? "pointer" : "";
       if (!b) { map.closeTooltip(tip); return; }
       const s = statusOf(b.id);
-      tip.setLatLng([b.lat, b.lng]).setContent(esc(`${b.id} · ${SHORT[s.status]}${s.current ? " — " + publicName(s.current) : ""}`));
+      tip.setLatLng([b.lat, b.lng]).setContent(esc(`${b.name} · ${SHORT[s.status]}${s.current ? " · " + publicName(s.current) : ""}`));
       if (!map.hasLayer(tip)) tip.addTo(map);
     });
   });
@@ -580,9 +581,9 @@ function renderGeo(all) {
 function renderList(all) {
   const rows = all.filter(x => matches(x.b, x.s));
   const LIMIT = 200, shown = rows.slice(0, LIMIT);
-  $("view").innerHTML = `<div class="table-wrap"><table><thead><tr><th>Bench</th><th>Area</th><th>Status</th><th>Adopted by</th><th>Through</th></tr></thead><tbody>${
+  $("view").innerHTML = `<div class="table-wrap"><table><thead><tr><th>Bench</th><th>Status</th><th>Adopted by</th><th>Through</th></tr></thead><tbody>${
     shown.map(({ b, s }) => { const a = s.current || s.upcoming[0];
-      return `<tr data-id="${b.id}" class="${state.sel === b.id ? "sel" : ""}" tabindex="0"><td class="mono">${b.id}</td><td>${b.zoneName}</td><td><span class="pill p-${s.status}"><span class="sw s-${s.status}"></span>${SHORT[s.status]}</span></td><td>${a ? esc(publicName(a)) : "—"}</td><td>${a ? fmt(a.end) : "—"}</td></tr>`; }).join("")
+      return `<tr data-id="${b.id}" class="${state.sel === b.id ? "sel" : ""}" tabindex="0"><td>${b.name}</td><td><span class="pill p-${s.status}"><span class="sw s-${s.status}"></span>${SHORT[s.status]}</span></td><td>${a ? esc(publicName(a)) : "—"}</td><td>${a ? fmt(a.end) : "—"}</td></tr>`; }).join("")
   }</tbody></table></div>${rows.length > LIMIT ? `<p class="more">Showing ${LIMIT} of ${rows.length}. Search or filter to narrow down.</p>` : rows.length ? "" : `<p class="more">No benches match. Try another search or filter.</p>`}`;
 }
 
@@ -604,7 +605,7 @@ function renderPanel() {
   }
   const b = BY_ID[state.sel], s = statusOf(b.id), cur = s.current;
   const earliest = earliestStart(b.id);
-  let html = `<div><div class="label">${esc(b.zoneName)}</div><div class="bench-id" style="margin-top:2px">${b.id}</div>
+  let html = `<div><div class="label">Bench details</div><div class="bench-id" style="margin-top:4px">${b.name}</div>
     <div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap"><span class="pill p-${s.status}"><span class="sw s-${s.status}"></span>${STATUS[s.status]}</span><span style="font-size:13px;color:var(--muted)">${b.type}</span></div></div>`;
   if (cur) {
     const left = daysBetween(TODAY, cur.end);
@@ -663,7 +664,7 @@ function renderPanel() {
     // the button says plainly whether this starts today or is a booking for later
     const later = st && st > TODAY, go = $("f-go");
     go.classList.toggle("later", !!later);
-    go.textContent = later ? `Reserve for later · starts ${fmt(st)}` : `Reserve now · bench ${b.id}`;
+    go.textContent = later ? `Reserve for later · starts ${fmt(st)}` : `Reserve now · starts today`;
   };
   fs.addEventListener("input", upd); fe.addEventListener("input", upd);
   p.querySelectorAll("[data-preset]").forEach(btn => btn.addEventListener("click", () => { if (fs.value) { fe.value = PRESETS[+btn.dataset.preset](fs.value); upd(); } }));
@@ -688,8 +689,8 @@ function submit(id) {
   adoptions.push({ id: "m" + Date.now(), benchId: id, userId: me.id, donor: name, email: me.email, anonymous: $("f-anon").checked, plaque, start, end, createdAt: TODAY });
   save(); render();
   toast(start > TODAY
-    ? `You're in line! ${id} is yours from ${fmt(start)} through ${fmt(end)}. Find it under My adoptions.`
-    : `Reserved ${id} starting today, through ${fmt(end)}. Thank you!`);
+    ? `You're in line! ${BY_ID[id].name} is yours from ${fmt(start)} through ${fmt(end)}. Find it under My adoptions.`
+    : `Reserved ${BY_ID[id].name} starting today, through ${fmt(end)}. Thank you!`);
 }
 
 /* ---------- dialogs ---------- */
@@ -729,7 +730,7 @@ function showCreated() {
       <p>Welcome to the registry, ${esc(me.name)}. You're signed in and ready to reserve a bench.</p>
       <div class="who">Signed in as <b>${esc(me.email)}</b></div>
       <div class="actions">
-        ${b ? `<button type="button" class="btn" data-close>Continue reserving ${b.id}</button>` : `<button type="button" class="btn" data-close>Find a bench</button>`}
+        ${b ? `<button type="button" class="btn" data-close>Continue reserving ${b.name}</button>` : `<button type="button" class="btn" data-close>Find a bench</button>`}
       </div>
     </div>`;
   $("auth-form").querySelector("[data-close]").focus();
@@ -766,7 +767,7 @@ function renderMine() {
   $("mine-list").innerHTML = mine.length ? mine.map(a => {
     const b = BY_ID[a.benchId], done = a.end < TODAY;
     const tag = done ? (a.cancelledAt ? "Cancelled" : "Ended") : a.start > TODAY ? "Upcoming" : "Active";
-    return `<li class="${done ? "past" : ""}"><div class="top"><span><span class="mono">${a.benchId}</span> · ${esc(b.zoneName)}</span><span class="label">${tag}</span></div>
+    return `<li class="${done ? "past" : ""}"><div class="top"><span><b>${b.name}</b></span><span class="label">${tag}</span></div>
       <span class="dates">${fmt(a.start)} – ${fmt(a.end)} · ${durLabel(a.start, a.end)}</span>${done ? "" : cancelControl(a)}</li>`;
   }).join("") : `<li><p class="empty" style="margin:0">You haven't reserved any benches yet. Pick an open bench to get started.</p></li>`;
 }
