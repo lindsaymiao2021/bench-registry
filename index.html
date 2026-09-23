@@ -699,7 +699,13 @@ function renderPanel() {
   const lineNote = aheadAtOpening > 1
     ? ` ${aheadAtOpening - 1} more ${aheadAtOpening - 1 === 1 ? "reservation is" : "reservations are"} lined up after that, so the next opening would make you <b style="display:inline">#${aheadAtOpening + 1} in line</b>.`
     : aheadAtOpening === 1 ? ` You'd be <b style="display:inline">next in line</b>.` : "";
-  const notice = busy
+  // the bench is yours right now: say so plainly and offer to extend, not "not available"
+  const mineNow = !!(holder && me && holder.userId === me.id);
+  const notice = mineNow
+    ? `<div class="notice info">${ICON_INFO}<div><b>You've already adopted this bench</b>It's yours through <b style="display:inline">${fmt(holder.end)}</b>. ${aheadAtOpening > 0
+        ? `${aheadAtOpening} ${aheadAtOpening === 1 ? "person is" : "people are"} lined up after you, so if you'd like it again, the earliest open day is ${fmt(earliest)} and you'd be #${aheadAtOpening + 1} in line.`
+        : `Want to keep it longer? Choose dates below, starting ${fmt(earliest)} or later, to extend your adoption.`}</div></div>`
+    : busy
     ? `<div class="notice">${ICON_CLOCK}<div><b>Not available right now</b>${holder ? holderName(holder) : "Someone has"} this bench through ${fmt(holder ? holder.end : addDays(earliest, -1))}.${lineNote} You can't reserve it right away; the earliest open day is <b style="display:inline">${fmt(earliest)}</b>.</div></div>`
     : nextBooking
       ? `<div class="notice info">${ICON_INFO}<div><b>Open now, booked later</b>This bench is free today, but it's reserved from ${fmt(nextBooking.start)}. Your dates need to end by ${fmt(addDays(nextBooking.start, -1))}.</div></div>`
@@ -713,7 +719,7 @@ function renderPanel() {
   const max0 = latestEnd(b.id, earliest);
   let end0 = endOf(earliest, 12); if (max0 && end0 > max0) end0 = max0;
   html += `<form id="adopt" novalidate>
-    <h3>${takenByOthers ? "Reserve for later" : "Reserve this bench"}</h3>
+    <h3>${mineNow ? (aheadAtOpening > 0 ? "Adopt it again later" : "Extend your adoption") : takenByOthers ? "Reserve for later" : "Reserve this bench"}</h3>
     ${notice}
     <div class="row">
       <div class="field"><label for="f-start">First day</label><input id="f-start" type="date" min="${TODAY}" value="${earliest}" required></div>
@@ -743,6 +749,7 @@ function renderPanel() {
     const ahead = st ? othersAhead(st) : 0, go = $("f-go");
     go.classList.toggle("later", ahead > 0);
     go.textContent = ahead > 0 ? `Reserve for later · #${ahead + 1} in line, starts ${fmt(st)}`
+      : mineNow && st > TODAY ? `Extend my adoption · from ${fmt(st)}`
       : !st || st <= TODAY ? "Reserve now · starts today" : `Reserve · starts ${fmt(st)}`;
   };
   fs.addEventListener("input", upd); fe.addEventListener("input", upd);
