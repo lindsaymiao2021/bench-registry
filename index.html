@@ -40,6 +40,24 @@ button,input,select,textarea{font:inherit;color:inherit}
 header{padding-block:12px 18px;display:flex;flex-wrap:wrap;gap:12px 32px;align-items:flex-end;justify-content:space-between;border-bottom:2px solid var(--ink)}
 header h1{font-size:clamp(26px,4vw,36px);font-weight:800;letter-spacing:-.01em}
 header p{margin:4px 0 0;color:var(--muted);max-width:56ch}
+header .lede{margin-top:8px;max-width:62ch;color:var(--ink);font-size:15.5px;line-height:1.55}
+.steps{list-style:none;counter-reset:step;display:flex;flex-wrap:wrap;gap:6px 18px;margin:12px 0 0;padding:0;font-size:13.5px;color:var(--muted)}
+.steps li{counter-increment:step;display:flex;align-items:center;gap:7px}
+.steps li::before{content:counter(step);display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--green-soft);color:var(--green);font:700 11.5px/1 var(--display)}
+/* taken-bench notice, account-created confirmation */
+.notice{display:flex;gap:10px;align-items:flex-start;background:var(--amber-soft);border-radius:6px;padding:12px;font-size:14px;line-height:1.45}
+.notice svg{flex:none;margin-top:1px;color:var(--amber)}
+.notice b{display:block;margin-bottom:2px}
+.notice.info{background:var(--green-soft)}
+.notice.info svg{color:var(--green)}
+.btn.later{background:var(--amber);color:#1F1606}
+.dlg-intro{margin:0;color:var(--muted);font-size:14px}
+.done{display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;padding-block:6px}
+.done .tick{width:56px;height:56px;border-radius:50%;background:var(--green-soft);color:var(--green);display:grid;place-items:center}
+.done h3{font-size:21px}
+.done p{margin:0;color:var(--muted);max-width:34ch}
+.done .who{background:var(--ground);border-radius:6px;padding:8px 12px;font-size:13.5px;color:var(--ink);width:100%}
+.done .actions{display:flex;flex-direction:column;gap:8px;width:100%;margin-top:4px}
 .stats{display:flex;flex-wrap:wrap;gap:6px 24px;font-variant-numeric:tabular-nums}
 .stat b{display:block;font-family:var(--display);font-size:24px;font-weight:800;line-height:1.1}
 .stat span{font-size:12.5px;color:var(--muted)}
@@ -195,7 +213,12 @@ dialog form{border-top:0;padding-top:0}
   <header>
     <div>
       <h1>Bench Adoption Registry</h1>
-      <p>Every bench in the park, who has adopted it, and until when. Pick an open bench to adopt it.</p>
+      <p class="lede">Van Cortlandt Park's bench adoption program lets neighbors, families and local groups sponsor one of the park's 520 benches, often with a brass plaque honoring someone they love. This registry is the program's single record: it shows which benches are adopted, by whom, and until when, and it's where you reserve an open bench for yourself.</p>
+      <ol class="steps">
+        <li>Find a bench on the map or list</li>
+        <li>Create a free account</li>
+        <li>Choose your dates and plaque</li>
+      </ol>
     </div>
     <div class="stats" id="stats"></div>
   </header>
@@ -420,6 +443,9 @@ function cancelAdoption(aid) {
 const STATUS = { available: "Available", adopted: "Adopted", expiring: `Ends within ${EXPIRING_DAYS} days`, reserved: "Reserved (starts later)" };
 const SHORT = { available: "Available", adopted: "Adopted", expiring: "Ending soon", reserved: "Reserved" };
 const publicName = a => a.anonymous ? "Anonymous donor" : a.donor;
+const ICON_CLOCK = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>`;
+const ICON_INFO = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>`;
+const ICON_TICK = `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>`;
 
 /* ---------- UI state ---------- */
 let state = { view: "map", filter: "all", q: "", sel: null };
@@ -590,9 +616,18 @@ function renderPanel() {
   if (s.upcoming.length) html += `<div><div class="label" style="margin-bottom:6px">Reserved</div><ul class="history">${s.upcoming.map(a => `<li><b>${esc(publicName(a))}</b><span>${fmt(a.start)} – ${fmt(a.end)}</span></li>`).join("")}</ul></div>`;
   if (s.past.length) html += `<div><div class="label" style="margin-bottom:6px">Past adoptions</div><ul class="history">${s.past.map(a => `<li><b>${esc(publicName(a))}${a.cancelledAt ? " (cancelled)" : ""}</b><span>${fmt(a.start)} – ${fmt(a.end)}</span></li>`).join("")}</ul></div>`;
 
+  // busy = someone holds the bench today, so the earliest a new term can begin is later
   const busy = earliest > TODAY;
+  const holder = termsFor(b.id).find(a => a.start <= TODAY && TODAY <= a.end) || null;
+  const nextBooking = !busy ? termsFor(b.id).find(a => a.start > TODAY) : null;
+  const holderName = h => (me && h.userId === me.id) ? "You have" : `${esc(publicName(h))} has`;
+  const notice = busy
+    ? `<div class="notice">${ICON_CLOCK}<div><b>Not available right now</b>${holder ? holderName(holder) : "Someone has"} this bench through ${fmt(addDays(earliest, -1))}. You can't reserve it right away, but you can claim the next opening, starting <b style="display:inline">${fmt(earliest)}</b>.</div></div>`
+    : nextBooking
+      ? `<div class="notice info">${ICON_INFO}<div><b>Open now, booked later</b>This bench is free today, but it's reserved from ${fmt(nextBooking.start)}. Your dates need to end by ${fmt(addDays(nextBooking.start, -1))}.</div></div>`
+      : "";
   if (!me) {
-    html += `<div class="gate"><h3 style="font-size:17px">Reserve this bench</h3><p>${busy ? `Open from ${fmt(earliest)}. ` : ""}Create a free account to reserve a bench, and to cancel it later if your plans change.</p>
+    html += `<div class="gate"><h3 style="font-size:17px">${busy ? "Reserve for later" : "Reserve this bench"}</h3>${notice}<p>Create a free account to ${busy ? "get the next opening on this bench" : "reserve this bench"}, and to cancel it later if your plans change.</p>
       <div class="actions"><button class="btn-ghost primary" data-act="signup">Create account</button><button class="btn-ghost" data-act="signin">Sign in</button></div></div>`;
     p.innerHTML = html;
     return;
@@ -600,8 +635,8 @@ function renderPanel() {
   const max0 = latestEnd(b.id, earliest);
   let end0 = endOf(earliest, 12); if (max0 && end0 > max0) end0 = max0;
   html += `<form id="adopt" novalidate>
-    <h3>Reserve this bench</h3>
-    ${busy ? `<p class="summary" style="margin:0">Booked until ${fmt(addDays(earliest, -1))}. The next open day is ${fmt(earliest)}.</p>` : ""}
+    <h3>${busy ? "Reserve for later" : "Reserve this bench"}</h3>
+    ${notice}
     <div class="row">
       <div class="field"><label for="f-start">First day</label><input id="f-start" type="date" min="${TODAY}" value="${earliest}" required></div>
       <div class="field"><label for="f-end">Last day</label><input id="f-end" type="date" min="${earliest}" ${max0 ? `max="${max0}"` : ""} value="${end0}" required></div>
@@ -612,7 +647,7 @@ function renderPanel() {
     <label class="check"><input type="checkbox" id="f-anon"> List me as “Anonymous donor” on this site</label>
     <p class="summary" id="f-sum" style="margin:0"></p>
     <p class="err" id="f-err" hidden></p>
-    <button class="btn" type="submit">Reserve bench ${b.id}</button>
+    <button class="btn" type="submit" id="f-go"></button>
   </form>`;
   p.innerHTML = html;
 
@@ -625,6 +660,10 @@ function renderPanel() {
     if (st && fe.value && fe.value < st) fe.value = st;
     if (max && fe.value > max) fe.value = max;
     $("f-sum").textContent = st && fe.value ? `${durLabel(st, fe.value)}: ${fmt(st)} through ${fmt(fe.value)}${max ? ` (next booking starts ${fmt(addDays(max, 1))})` : ""}` : "Pick a first and last day.";
+    // the button says plainly whether this starts today or is a booking for later
+    const later = st && st > TODAY, go = $("f-go");
+    go.classList.toggle("later", !!later);
+    go.textContent = later ? `Reserve for later · starts ${fmt(st)}` : `Reserve now · bench ${b.id}`;
   };
   fs.addEventListener("input", upd); fe.addEventListener("input", upd);
   p.querySelectorAll("[data-preset]").forEach(btn => btn.addEventListener("click", () => { if (fs.value) { fe.value = PRESETS[+btn.dataset.preset](fs.value); upd(); } }));
@@ -643,48 +682,82 @@ function submit(id) {
   if (end < start) return err("The last day must be on or after the first day.");
   if (lines.length > 3 || lines.some(l => l.length > 32)) return err("The plaque fits 3 lines of up to 32 characters. Shorten the inscription.");
   const clash = overlaps(id, start, end);
-  if (clash) return err(`Those dates overlap an existing booking (${fmt(clash.start)} – ${fmt(clash.end)}). Choose dates outside it.`);
+  if (clash) return err(clash.start <= TODAY && start <= TODAY
+    ? `This bench is taken until ${fmt(clash.end)}, so it can't be reserved right away. Start on ${fmt(earliestStart(id))} or later.`
+    : `Those dates overlap an existing booking (${fmt(clash.start)} – ${fmt(clash.end)}). Choose dates outside it.`);
   adoptions.push({ id: "m" + Date.now(), benchId: id, userId: me.id, donor: name, email: me.email, anonymous: $("f-anon").checked, plaque, start, end, createdAt: TODAY });
   save(); render();
-  toast(`Reserved ${id} for ${durLabel(start, end)}, ${fmt(start)} through ${fmt(end)}. Thank you!`);
+  toast(start > TODAY
+    ? `You're in line! ${id} is yours from ${fmt(start)} through ${fmt(end)}. Find it under My adoptions.`
+    : `Reserved ${id} starting today, through ${fmt(end)}. Thank you!`);
 }
 
 /* ---------- dialogs ---------- */
 function openAuth(mode) {
   authMode = mode;
   const up = mode === "signup";
-  $("auth-form").innerHTML = `
-    <div class="dlg-head"><h3 id="auth-title" style="font-size:19px">${up ? "Create an account" : "Sign in"}</h3><button type="button" class="x" data-close aria-label="Close">×</button></div>
-    ${up ? `<div class="field"><label for="a-name">Full name</label><input id="a-name" autocomplete="name" maxlength="80" required></div>` : ""}
-    <div class="field"><label for="a-email">Email</label><input id="a-email" type="email" autocomplete="email" required></div>
-    <div class="field"><label for="a-pw">Password</label><input id="a-pw" type="password" autocomplete="${up ? "new-password" : "current-password"}" required>${up ? `<span class="hint">At least 8 characters.</span>` : ""}</div>
+  // Sign-up and sign-in are deliberately different screens: different heading, intro,
+  // fields (sign-up confirms the password) and outcome (sign-up ends on a confirmation).
+  $("auth-form").innerHTML = up ? `
+    <div class="dlg-head"><h3 id="auth-title" style="font-size:19px">Create your account</h3><button type="button" class="x" data-close aria-label="Close">×</button></div>
+    <p class="dlg-intro">New to the registry? A free account lets you reserve benches and cancel them later.</p>
+    <div class="field"><label for="a-name">Full name</label><input id="a-name" autocomplete="name" maxlength="80" required></div>
+    <div class="field"><label for="a-email">Email</label><input id="a-email" type="email" autocomplete="email" required><span class="hint">Private. Never shown on the registry.</span></div>
+    <div class="field"><label for="a-pw">Choose a password</label><input id="a-pw" type="password" autocomplete="new-password" required><span class="hint">At least 8 characters.</span></div>
+    <div class="field"><label for="a-pw2">Confirm password</label><input id="a-pw2" type="password" autocomplete="new-password" required></div>
     <p class="err" id="a-err" hidden></p>
-    <button class="btn" type="submit">${up ? "Create account" : "Sign in"}</button>
-    <p class="switch">${up ? `Already have an account? <button type="button" class="linkbtn" data-act="signin">Sign in</button>` : `New here? <button type="button" class="linkbtn" data-act="signup">Create an account</button>`}</p>`;
+    <button class="btn" type="submit">Create my account</button>
+    <p class="switch">Already have an account? <button type="button" class="linkbtn" data-act="signin">Sign in instead</button></p>`
+  : `
+    <div class="dlg-head"><h3 id="auth-title" style="font-size:19px">Welcome back</h3><button type="button" class="x" data-close aria-label="Close">×</button></div>
+    <p class="dlg-intro">Sign in to reserve a bench or manage your adoptions.</p>
+    <div class="field"><label for="a-email">Email</label><input id="a-email" type="email" autocomplete="email" required></div>
+    <div class="field"><label for="a-pw">Password</label><input id="a-pw" type="password" autocomplete="current-password" required></div>
+    <p class="err" id="a-err" hidden></p>
+    <button class="btn" type="submit">Sign in</button>
+    <p class="switch">Don't have an account yet? <button type="button" class="linkbtn" data-act="signup">Create one</button></p>`;
   if (!$("auth-dlg").open) $("auth-dlg").showModal();
   $(up ? "a-name" : "a-email").focus();
 }
+// shown in place of the sign-up form once the account exists
+function showCreated() {
+  const b = state.sel ? BY_ID[state.sel] : null;
+  $("auth-form").innerHTML = `
+    <div class="done">
+      <div class="tick">${ICON_TICK}</div>
+      <h3 id="auth-title">Account created</h3>
+      <p>Welcome to the registry, ${esc(me.name)}. You're signed in and ready to reserve a bench.</p>
+      <div class="who">Signed in as <b>${esc(me.email)}</b></div>
+      <div class="actions">
+        ${b ? `<button type="button" class="btn" data-close>Continue reserving ${b.id}</button>` : `<button type="button" class="btn" data-close>Find a bench</button>`}
+      </div>
+    </div>`;
+  $("auth-form").querySelector("[data-close]").focus();
+}
 $("auth-form").addEventListener("submit", async e => {
   e.preventDefault();
-  const err = m => { $("a-err").textContent = m; $("a-err").hidden = false; };
+  const err = m => { $("a-err").innerHTML = m; $("a-err").hidden = false; };
   const email = $("a-email").value.trim(), pw = $("a-pw").value;
   try {
     if (authMode === "signup") {
       const name = $("a-name").value.trim();
       if (!name) return err("Enter your full name.");
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return err("Enter a valid email address, like name@example.com.");
+      if (users.some(u => u.email === email.toLowerCase())) return err(`There's already an account for ${esc(email)}. <button type="button" class="linkbtn" data-act="signin">Sign in instead</button>`);
       if (pw.length < 8) return err("Use a password of at least 8 characters.");
+      if (pw !== $("a-pw2").value) return err("The two passwords don't match. Type them again.");
       await signUp(name, email, pw);
-      toast(`Welcome, ${name}. You can now reserve benches.`);
+      showCreated();
     } else {
+      if (!email || !pw) return err("Enter your email and password.");
       await signIn(email, pw);
-      toast(`Signed in as ${me.name}.`);
+      $("auth-dlg").close();
+      toast(`Welcome back, ${me.name}. You're signed in.`);
     }
-    $("auth-dlg").close();
-  } catch (m) { err(typeof m === "string" ? m : "Something went wrong. Try again."); }
+  } catch (m) { err(typeof m === "string" ? esc(m) : "Something went wrong. Try again."); }
 });
 $("auth-form").addEventListener("click", e => {
-  if (e.target.closest("[data-close]")) $("auth-dlg").close();
+  if (e.target.closest("[data-close]")) { $("auth-dlg").close(); return; }
   const a = e.target.closest("[data-act]"); if (a) openAuth(a.dataset.act);
 });
 
