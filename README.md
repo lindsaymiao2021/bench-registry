@@ -8,7 +8,8 @@ A single-page app that serves as the one source of truth for Van Cortlandt Park'
 - **Browse:** all 520 benches, grouped by park area. Each bench is a square coloured by its status (available, adopted, ending within 90 days, or reserved). There's also a searchable list view.
 - **Map:** every bench plotted on an OpenStreetMap map of the park, coloured by status. The status filters and search dim the benches that don't match, and clicking a bench opens its details. Positions are approximate, generated within each area or along each trail.
 - **Look up a bench:** see who adopted it (or "Anonymous donor"), the dates and length of the term, the plaque inscription, any future reservations, and past adoptions.
-- **Accounts:** you must create an account (name, email, password) or sign in before you can reserve a bench.
+- **Accounts:** you must create an account or sign in before you can reserve a bench. Creating an account is its own flow (full name, email, password and a password confirmation), and it ends on an "Account created" confirmation, so you can always tell sign-up apart from sign-in.
+- **Reserve for later:** if a bench is taken today, the panel says "Not available right now", names who has it and until when, and offers the next opening. The button changes to "Reserve for later · starts {date}" so it's clear the reservation doesn't begin today.
 - **Reserve any length of time:** pick a first day and a last day from calendar date pickers. Quick buttons fill in 1 week, 1 month, 6 months, 1 year or 5 years. The calendar won't let the last day run into the next booking.
 - **Cancel at any time:** under "My adoptions", or from the bench itself. Cancelling a reservation that hasn't started removes it. Cancelling one that's running ends it yesterday, so the bench is open to others right away. Past terms show as "(cancelled)" in the bench history.
 
